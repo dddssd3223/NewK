@@ -6,6 +6,7 @@
 좌표는 모두 원본 양식 PDF와 같은 pt 단위(왼쪽 위 기준)이다.
 """
 import os
+import zipfile
 
 import pymupdf
 from fontTools.pens.boundsPen import BoundsPen
@@ -64,8 +65,18 @@ def font_files():
     return out
 
 
+def goorm_bold():
+    """goorm-sans-all-1.0.0.zip 에서 구름 산스 Bold 를 fonts/ 로 꺼낸다."""
+    path = os.path.join(FONT_DIR, "goorm-sans-bold.ttf")
+    if not os.path.exists(path):
+        with zipfile.ZipFile(os.path.join(HERE, "goorm-sans-all-1.0.0.zip")) as z:
+            data = z.read("goorm sans/Public/TTF/goorm-sans-bold.ttf")
+        open(path, "wb").write(data)
+    return path
+
+
 FONTS = font_files()
-FONTS["Title"] = os.path.join(HERE, "HYGothic-Extra.TTF")  # 제목: HY견고딕
+FONTS["Title"] = goorm_bold()  # 제목: 구름 산스 Bold
 METRICS = {k: pymupdf.Font(fontfile=v) for k, v in FONTS.items()}
 
 
@@ -148,8 +159,8 @@ def scan_text(page, s, ink_left_px, ink_bottom_px, size, font, stroke=0.0):
     page.insert_text((x, y), s, **kw)
 
 
-# 제목: HY견고딕. 원본 스캔의 글자 높이(약 38px)에 맞춘 크기와 장평(가로 비율).
-TITLE_SIZE, TITLE_X = 21.0, 0.955
+# 제목: 구름 산스 Bold. 원본 스캔의 글자 높이(약 38px)에 맞춘 크기와 장평(가로 비율).
+TITLE_SIZE, TITLE_X = 20.54, 1.055
 TITLE_LEFT, TITLE_RIGHT_MAX = 219, 830   # 제목이 들어갈 스캔 x 범위 (오른쪽은 시행일 앞)
 TITLE_GAPS = (22, 28, 28, 20)            # 낱말 사이 간격(px): 2|학년|과목|중간고사|문제
 SUBJECT_SPACE = 12                       # 과목명 안의 띄어쓰기(px)
