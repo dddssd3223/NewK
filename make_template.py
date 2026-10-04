@@ -8,7 +8,7 @@
 import os
 
 import pymupdf
-from fontTools.ttLib import TTCollection
+from fontTools.ttLib import TTCollection, TTFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
@@ -64,7 +64,15 @@ def font_files():
 
 
 FONTS = font_files()
+FONTS["HY"] = os.path.join(HERE, "HYGothic-Extra.TTF")  # HY견고딕 (머리글)
 METRICS = {k: pymupdf.Font(fontfile=v) for k, v in FONTS.items()}
+_HY = TTFont(FONTS["HY"])
+_HY_CMAP, _HY_UPM = _HY.getBestCmap(), _HY["head"].unitsPerEm
+
+
+def hy_lsb(ch):
+    """HY견고딕 글자의 왼쪽 여백(em 비율) — 잉크 시작 위치를 맞출 때 쓴다."""
+    return _HY["hmtx"][_HY_CMAP[ord(ch)]][1] / _HY_UPM
 
 
 SPACE = 0.5  # 본문 공백 폭(글자 크기 비율). 원본 양식(한글 문서)과 같다.
@@ -99,21 +107,52 @@ def line(page, p0, p1, w):
 
 
 # ── 공통 틀 ────────────────────────────────────────────────
+# 머리글은 원본 문학 시험지(스캔)에 맞춘다. 스캔 좌표(px) -> 양식 좌표(pt) 변환:
+# 스캔 본문 테두리 왼쪽 77px, 위 282px 가 양식의 34pt, 144.6pt 에 오도록 맞춘 배율.
+SCAN_K = 527.2 / 1036
+
+
+def sx(px):
+    return 34.0 + (px - 77) * SCAN_K
+
+
+def sy(py):
+    return 144.6 + (py - 282) * SCAN_K
+
+
+def ink_text(page, ink_px, baseline, s, size, font="HY"):
+    """잉크(글자 모양)의 왼쪽 끝이 스캔의 ink_px 에 오도록 HY견고딕으로 쓴다."""
+    x = sx(ink_px) - hy_lsb(s[0]) * size
+    page.insert_text((x, baseline), s, fontname=font, fontfile=FONTS[font], fontsize=size,
+                     color=BLACK)
+
+
 def header(page, info):
-    page.insert_image(pymupdf.Rect(46.7, 93.7, 83.3, 128.6),
+    # 학교 로고: 스캔에서 원 지름이 x 132~195px, y 178~242px
+    cx, cy = sx(163.5), sy(210)
+    page.insert_image(pymupdf.Rect(cx - 18.3, cy - 17.45, cx + 18.3, cy + 17.45),
                       filename=os.path.join(ASSETS, "logo.jpeg"))
-    x = 83.3
-    for s, size in ((f" {info['grade']}", 20.04), ("학년 ", 15.0), (info["subject"], 21.0),
-                    ("과 ", 15.0), (info["exam"], 17.5), (" 문제", 15.0)):
-        text(page, x, 123.5, s, size=size, stroke=0.02)
-        x += width(s, "Gulim", size)
-    text(page, 551.3, 126.6, f"시행일 {info['date']} - {info['period']}", size=6.96,
-         anchor="r")
-    page.draw_rect(pymupdf.Rect(45.2, 130.0, 561.4, 134.0), color=None, fill=BLACK)
-    text(page, 84.2, 142.1,
-         f"과 정 : ( {info['course']} )     과목코드 : ( {info['code']} )     "
-         f"이수학점 : (  {info['credits']}  )     문항수 ( 선택형: {info['n_choice']}, "
-         f"서답형: {info['n_essay']} )")
+    # 제목 (HY견고딕 19pt) — 각 낱말의 잉크 시작 위치는 스캔에서 잰 값
+    base = sy(236) + 0.11 * 19
+    s1, s2 = info["subject"][0], info["subject"][1:]
+    for s, px in ((info["grade"], 219), ("학년", 262), (s1, 380), (s2, 460),
+                  (info["exam"], 538), ("문제", 716)):
+        if s:
+            ink_text(page, px, base, s, 19)
+    # 시행일 (오른쪽 끝 1101px)
+    text(page, sx(1101) + 0.3, sy(245) - 0.6, f"시행일 {info['date']} - {info['period']}",
+         size=6.96, anchor="r")
+    # 굵은 띠 (스캔 y 250~256px)
+    page.draw_rect(pymupdf.Rect(45.2, sy(249.5), 561.4, sy(256.5)), color=None, fill=BLACK)
+    # 과정·과목코드 줄 (HY견고딕 8pt) — 토큰별 잉크 시작 위치는 스캔에서 잰 값
+    base = sy(275) + 0.11 * 8
+    for s, px in (("과", 187), ("정", 211), (":", 235), (f"( {info['course'].split()[0]}", 248),
+                  ("개정", 306), ("교육과정", 346), (")", 417),
+                  ("과목코드", 463), (":", 535), (f"( {info['code']}", 547), (")", 587),
+                  ("이수단위", 632), (":", 704), ("(", 717), (info["credits"], 730), (")", 747),
+                  ("문항수", 793), ("(", 849), ("선택형:", 863),
+                  (f"{info['n_choice']} 서답형:", 923), (str(info["n_essay"]), 1010), (")", 1035)):
+        ink_text(page, px, base, s, 8)
 
 
 def frame(page):
