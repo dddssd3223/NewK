@@ -58,7 +58,7 @@ WHITE = (1, 1, 1)
 def font_files():
     os.makedirs(FONT_DIR, exist_ok=True)
     out = {}
-    for idx, name in ((0, "Gulim"), (1, "GulimChe")):
+    for idx, name in ((0, "Gulim"), (1, "GulimChe"), (2, "Dotum")):
         path = os.path.join(FONT_DIR, name + ".ttf")
         if not os.path.exists(path):
             TTCollection(os.path.join(HERE, "gulim.ttc"))[idx].save(path)
@@ -270,9 +270,11 @@ def last_page_block(page, info, marks):
 
 
 # ── 문제 배치 ──────────────────────────────────────────────
-# 글자 크기는 원본 문학 시험지(본문 약 9.7pt 돋움, 줄 간격 약 12pt)를 따른다.
+# 글꼴·크기는 원본 문학 시험지(본문 돋움 약 9.7pt, 줄 간격 약 12pt)를 따른다.
+# 원본처럼 획이 진하도록 배치 후 문제 글자를 채우기+외곽선으로 그린다(BODY_STROKE).
+BODY_STROKE = 0.24
 CSS = """
-@font-face { font-family: D; src: url(HDOTUM.TTF); }
+@font-face { font-family: D; src: url(Dotum.ttf); }
 * { font-family: D; }
 body { font-size: 9.7pt; line-height: 1.27; text-align: justify; }
 p { margin: 0; }
@@ -316,7 +318,16 @@ td.hd2 { border: 0.6pt solid black; width: 22%; padding: 1pt; }
 td.bd2 { border: 0.6pt solid black; border-top: none; padding: 3pt 2pt; }
 td.sp { width: 4%; }
 td.dg { font-size: 8pt; line-height: 1.15; }
-.q18t { font-size: 11.5pt; vertical-align: middle; padding-left: 6pt; }
+.q18t { font-size: 11.5pt; vertical-align: middle; padding-left: 8pt; }
+table.srch { width: 92%; margin: 2pt 0 6pt 0; }
+td.sbox { border: 1.6pt solid #555555; border-right: none; padding: 3pt 6pt; font-size: 12pt; }
+td.sarr { border: 1.6pt solid #555555; border-left: none; width: 20pt; font-size: 6pt;
+          text-align: center; vertical-align: middle; }
+td.sgap { width: 4pt; }
+td.sbtn { width: 34pt; background-color: #bbbbbb; border: 1.2pt solid #555555; text-align: center;
+          vertical-align: middle; font-size: 9pt; }
+td.badge { width: 34pt; border: 0.8pt solid #777777; text-align: center; font-size: 6.5pt;
+           line-height: 1.1; padding: 4pt 0; vertical-align: middle; }
 .fig { text-align: center; margin: 2pt 0 4pt 0; }
 """
 COLS = ((42.5, 292.0), (302.5, 553.0))      # 왼쪽·오른쪽 단의 x 범위
@@ -325,11 +336,11 @@ Q_GAP = 16.0                                 # 문제 사이 간격(pt)
 CLOSING_TOP = 610.0                          # 마지막 쪽 '수고하셨습니다' 자리
 
 
-def question_html(n, stem, body):
+def question_html(n, stem, body, pts):
     # MuPDF 는 표 칸의 % 너비를 무시하므로 단 안쪽 너비(약 240pt) 기준 pt 로 바꾼다
     body = re.sub(r'<(td|th)([^>]*?)width:(\d+)%',
                   lambda m: f"<{m[1]}{m[2]}width:{int(m[3]) * 2.4:.0f}pt", body)
-    return f'<p class="stem">{n}. {stem}</p>{body}'
+    return f'<p class="stem">{n}. {stem} ({pts:.1f}점)</p>{body}'
 
 
 def archive():
@@ -348,11 +359,11 @@ def measure(html, arc):
     return 2990 - spare
 
 
-def layout(questions, arc):
+def layout(questions, pts, arc):
     """문제를 쪽·단에 순서대로 채운다. 반환: [(쪽 번호, 단 번호, y, 높이, html)]"""
     slots, page, col, y = [], 1, 0, TOP1
     for n, (stem, body) in enumerate(questions, 1):
-        html = question_html(n, stem, body)
+        html = question_html(n, stem, body, pts[n - 1])
         h = measure(html, arc)
         top = TOP1 if (page, col) == (1, 0) else TOP
         if y + h > BOTTOM and y > top:      # 이 단에 안 들어가면 다음 단으로
@@ -369,11 +380,81 @@ def layout(questions, arc):
     return slots, last_page
 
 
+def thicken_question_text(doc):
+    """문제 블록(insert_htmlbox 가 만든 Form XObject)의 글자를 채우기+외곽선으로 바꾼다."""
+    done = set()
+    for page in doc:
+        for xref, name, *_ in page.get_xobjects():
+            if name != "fullpage" or xref in done:
+                continue
+            done.add(xref)
+            stream = doc.xref_stream(xref)
+            stream = re.sub(rb"\bBT\b", b"BT 2 Tr %.2f w 0 0 0 RG" % BODY_STROKE, stream)
+            doc.update_stream(xref, stream)
+
+
+# ── 9번 그림: 원본 그림을 그대로 다시 그린다 (좌표는 원본 그림 957×771px 기준) ──
+Q09_BOXES = [((30, 12, 255, 268), ("① ㅎ : 마", "찰음이자", "목청소리이", "다.")),
+             ((315, 15, 540, 270), ("② ㅈ : 파", "찰음이자", "안울림소리", "이다.")),
+             ((658, 18, 893, 275), ("③ ㅊ : 거", "센소리이자", "센입천장소", "리이다.")),
+             ((165, 495, 390, 752), ("④ ㄴ : 비", "음이자 입", "술소리이", "다.")),
+             ((630, 505, 880, 755), ("⑤ ㅇ : 울", "림소리이자", "여린입천장", "소리이다."))]
+Q09_JAMO = [("ㅎ", 165, 325, True), ("ㅁ", 258, 325, False), ("ㅣ", 298, 325, False),
+            ("ㅈ", 345, 325, True), ("ㅓ", 377, 325, False), ("ㅇ", 445, 325, False),
+            ("ㅜ", 160, 383, False), ("ㄴ", 258, 383, True), ("ㅇ", 355, 383, False),
+            ("ㅡ", 445, 383, False), ("ㄴ", 160, 432, False), ("ㅁ", 445, 432, False),
+            ("ㅊ", 660, 325, True), ("ㅏ", 692, 325, False), ("ㅈ", 752, 325, False),
+            ("ㅔ", 790, 325, False), ("ㅇ", 668, 383, True)]
+Q09_ARROWS = [((140, 315), (95, 290)), ((370, 310), (402, 290)), ((685, 310), (712, 293)),
+              ((258, 405), (258, 475)), ((668, 405), (668, 485))]
+
+
+def draw_q09(page, rect):
+    k = rect.width / 957
+    P = lambda x, y: pymupdf.Point(rect.x0 + x * k, rect.y0 + y * k)
+    size, font = 9.7, "Dotum"
+    page.draw_rect(pymupdf.Rect(P(0, 0), P(957, 771)), color=BLACK, width=0.6)
+    for (x0, y0, x1, y1), rows in Q09_BOXES:
+        page.draw_rect(pymupdf.Rect(P(x0, y0), P(x1, y1)), color=BLACK, width=0.8)
+        lead = (y1 - y0) * k / 4
+        for i, row in enumerate(rows):
+            y = rect.y0 + y0 * k + lead * (i + 0.72)
+            left, right = rect.x0 + (x0 + 14) * k, rect.x0 + (x1 - 12) * k
+            chars = list(row)
+            if i == len(rows) - 1 or len(chars) < 2:   # 마지막 줄은 왼쪽 정렬
+                text(page, left, y, row, font=font, size=size)
+                continue
+            # 원본처럼 글자를 칸 너비에 고르게 벌린다
+            widths = [width(c, font, size) for c in chars]
+            gap = (right - left - sum(widths)) / (len(chars) - 1)
+            x = left
+            for c, w in zip(chars, widths):
+                if c != " ":
+                    text(page, x, y, c, font=font, size=size)
+                x += w + gap
+    for ch, cx, cy, circled in Q09_JAMO:
+        c = P(cx, cy)
+        text(page, c.x, c.y + 3.0, ch, font=font, size=8.2, anchor="c")
+        if circled:
+            page.draw_circle(c, 18 * k, color=BLACK, width=0.5, dashes="[1 1] 0")
+    for (ax, ay), (bx, by) in Q09_ARROWS:
+        a, b = P(ax, ay), P(bx, by)
+        page.draw_line(a, b, color=BLACK, width=0.5, dashes="[1 1] 0")
+        d = (b - a) / abs(b - a)
+        n = pymupdf.Point(-d.y, d.x)
+        tip = b
+        page.draw_polyline([tip, tip - d * 5 + n * 2.2, tip - d * 5 - n * 2.2, tip],
+                           color=BLACK, fill=BLACK, width=0.3)
+
+
+FIGURES = {"q09": draw_q09}
+
+
 def main(out="시험지_양식.pdf"):
-    from questions import Q
-    info = dict(INFO, n_choice=len(Q))
+    from questions import PTS, Q
+    info = dict(INFO, n_choice=len(Q), choice_score=f"{sum(PTS):g}")
     arc = archive()
-    slots, n_pages = layout(Q, arc)
+    slots, n_pages = layout(Q, PTS, arc)
     info["pages"] = n_pages
     marks = pymupdf.open(os.path.join(ASSETS, "marks.pdf"))  # 마지막 쪽 이모티콘
     doc = pymupdf.open()
@@ -388,9 +469,15 @@ def main(out="시험지_양식.pdf"):
                 x0, x1 = COLS[col]
                 page.insert_htmlbox(pymupdf.Rect(x0, y, x1, y + h + 2), html, css=CSS,
                                     archive=arc)
+                for name, draw in FIGURES.items():
+                    m = re.search(rf'class="fig-{name}" style="height:(\d+)pt"', html)
+                    if m:  # 그림 자리는 문제의 맨 끝에 있다
+                        fh = float(m[1])
+                        draw(page, pymupdf.Rect(x0, y + h - fh, x1, y + h))
         if n == n_pages:
             last_page_block(page, info, marks)
         footer(page, info, n)
+    thicken_question_text(doc)
     doc.set_metadata({"title": f"{info['grade']}학년 {info['subject']} {info['exam']} 시험지"})
     doc.subset_fonts()
     doc.save(os.path.join(HERE, out), garbage=4, deflate=True)
