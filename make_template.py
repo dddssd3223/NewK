@@ -1,4 +1,4 @@
-"""양정고 정기고사 시험지 양식(양식 복사본.pdf)을 따라 만든 2학년 화법과 언어 빈 시험지 양식 PDF 생성기.
+"""양정고 정기고사 시험지 양식을 따라 2학년 화법과 언어 객관식 문제(questions.py)를 배치한 시험지 PDF 생성기.
 
 사용법:  python3 make_template.py            -> 시험지_양식.pdf
 필요:    pip install pymupdf fonttools
@@ -6,6 +6,7 @@
 좌표는 모두 원본 양식 PDF와 같은 pt 단위(왼쪽 위 기준)이다.
 """
 import os
+import re
 import zipfile
 
 import pymupdf
@@ -28,11 +29,11 @@ INFO = {
     "course": "2022 개정 교육과정",
     "code": "02",
     "credits": "4",
-    "n_choice": 24,
-    "n_essay": 6,
-    "choice_score": 65,
-    "essay_score": 35,
-    "pages": 14,
+    "n_choice": 42,       # 문항 수는 questions.py 에서 다시 센다
+    "n_essay": 0,
+    "choice_score": 100,
+    "essay_score": 0,
+    "pages": 1,           # 쪽수는 문제를 배치한 뒤 정해진다
 }
 
 NOTICES = [  # (글머리 기호 여부, 줄)
@@ -262,28 +263,138 @@ def last_page_block(page, info, marks):
     text(page, 355.4, 694.8,
          f"선택형 {info['n_choice']:>2}문제 = {info['choice_score']}점", size=13.8,
          space=NARROW)
-    text(page, 355.9, 715.6,
-         f"서답형 {info['n_essay']:>2}문제 = {info['essay_score']}점", size=13.8,
-         space=NARROW)
+    if info["n_essay"]:
+        text(page, 355.9, 715.6,
+             f"서답형 {info['n_essay']:>2}문제 = {info['essay_score']}점", size=13.8,
+             space=NARROW)
+
+
+# ── 문제 배치 ──────────────────────────────────────────────
+# 글자 크기는 원본 문학 시험지(본문 약 9.7pt 돋움, 줄 간격 약 12pt)를 따른다.
+CSS = """
+@font-face { font-family: D; src: url(HDOTUM.TTF); }
+* { font-family: D; }
+body { font-size: 9.7pt; line-height: 1.27; text-align: justify; }
+p { margin: 0; }
+.stem { padding-left: 1.45em; text-indent: -1.45em; margin-bottom: 3pt; }
+.c { padding-left: 1.25em; text-indent: -1.25em; }
+.c3 { padding-left: 3.1em; text-indent: -3.1em; }
+.c4 { padding-left: 1.9em; text-indent: -1.9em; }
+.c5 { padding-left: 4.4em; text-indent: -4.4em; }
+.ind { padding-left: 2.2em; }
+.ar { padding-left: 2.6em; text-indent: -1.3em; }
+.gap { margin-top: 4pt; margin-bottom: 4pt; }
+.ctr { text-align: center; }
+.rt { text-align: right; }
+.box { border: 0.6pt solid black; padding: 2pt 5pt 3pt 5pt; margin: 3pt 0 4pt 0; }
+.inner { margin: 3pt 0; }
+.bt { text-align: center; margin-bottom: 1pt; }
+table { border-collapse: collapse; width: 100%; }
+td, th { vertical-align: top; padding: 0; text-align: left; font-weight: normal; }
+table.g td { padding: 1pt 0; }
+table.n td { padding: 0 0 1pt 0; }
+table.n td.hd { white-space: nowrap; }
+td.br { border-left: 0.6pt solid black; border-top: 0.6pt solid black;
+        border-bottom: 0.6pt solid black; }
+table.t { margin: 2pt 0; }
+table.t td, table.t th { border: 0.6pt solid black; padding: 1.5pt 3pt; vertical-align: middle; }
+table.t th { text-align: center; }
+table.t td.nb { border: none; }
+table.hz td, table.vt td { text-align: center; }
+table.hz td.lt { text-align: left; }
+table.flow { margin-left: 50pt; }
+table.flow td { padding: 1pt 0; }
+td.w { width: 70pt; }
+td.ar { width: 70pt; padding-left: 1.4em; }
+table.flow td.bx { width: 60pt; }
+table.mid { margin: 3pt 0; }
+.lb { border: 0.6pt solid black; padding: 0 3pt; }
+td.bx { border: 0.6pt solid black; padding: 1pt 3pt; }
+table.kinds td { text-align: center; vertical-align: middle; }
+td.top { border: 0.6pt solid black; padding: 1pt; }
+td.hd2 { border: 0.6pt solid black; width: 22%; padding: 1pt; }
+td.bd2 { border: 0.6pt solid black; border-top: none; padding: 3pt 2pt; }
+td.sp { width: 4%; }
+td.dg { font-size: 8pt; line-height: 1.15; }
+.q18t { font-size: 11.5pt; vertical-align: middle; padding-left: 6pt; }
+.fig { text-align: center; margin: 2pt 0 4pt 0; }
+"""
+COLS = ((42.5, 292.0), (302.5, 553.0))      # 왼쪽·오른쪽 단의 x 범위
+TOP, TOP1, BOTTOM = 153.0, 338.0, 768.0      # 단의 위·아래 (1쪽 왼쪽 단은 OMR 안내 아래부터)
+Q_GAP = 16.0                                 # 문제 사이 간격(pt)
+CLOSING_TOP = 610.0                          # 마지막 쪽 '수고하셨습니다' 자리
+
+
+def question_html(n, stem, body):
+    # MuPDF 는 표 칸의 % 너비를 무시하므로 단 안쪽 너비(약 240pt) 기준 pt 로 바꾼다
+    body = re.sub(r'<(td|th)([^>]*?)width:(\d+)%',
+                  lambda m: f"<{m[1]}{m[2]}width:{int(m[3]) * 2.4:.0f}pt", body)
+    return f'<p class="stem">{n}. {stem}</p>{body}'
+
+
+def archive():
+    arc = pymupdf.Archive()
+    arc.add(FONT_DIR)
+    arc.add(ASSETS)
+    return arc
+
+
+def measure(html, arc):
+    """단 너비에서 문제가 차지하는 높이(pt)."""
+    w = COLS[0][1] - COLS[0][0]
+    doc = pymupdf.open()
+    page = doc.new_page(width=w + 20, height=3000)
+    spare, scale = page.insert_htmlbox(pymupdf.Rect(0, 0, w, 2990), html, css=CSS, archive=arc)
+    return 2990 - spare
+
+
+def layout(questions, arc):
+    """문제를 쪽·단에 순서대로 채운다. 반환: [(쪽 번호, 단 번호, y, 높이, html)]"""
+    slots, page, col, y = [], 1, 0, TOP1
+    for n, (stem, body) in enumerate(questions, 1):
+        html = question_html(n, stem, body)
+        h = measure(html, arc)
+        top = TOP1 if (page, col) == (1, 0) else TOP
+        if y + h > BOTTOM and y > top:      # 이 단에 안 들어가면 다음 단으로
+            col += 1
+            if col == 2:
+                page, col = page + 1, 0
+            y = TOP
+        slots.append((page, col, y, h, html))
+        y += h + Q_GAP
+    # 마지막 쪽 오른쪽 단 아래에 마무리 문구가 들어갈 자리가 없으면 한 쪽 더
+    last_page = page
+    if col == 1 and y > CLOSING_TOP:
+        last_page += 1
+    return slots, last_page
 
 
 def main(out="시험지_양식.pdf"):
-    info = INFO
+    from questions import Q
+    info = dict(INFO, n_choice=len(Q))
+    arc = archive()
+    slots, n_pages = layout(Q, arc)
+    info["pages"] = n_pages
     marks = pymupdf.open(os.path.join(ASSETS, "marks.pdf"))  # 마지막 쪽 이모티콘
     doc = pymupdf.open()
-    for n in range(1, info["pages"] + 1):
+    for n in range(1, n_pages + 1):
         page = doc.new_page(width=595, height=842)
         header(page, info)
         frame(page)
         if n == 1:
             first_page_block(page, info)
-        if n == info["pages"]:
+        for pg, col, y, h, html in slots:
+            if pg == n:
+                x0, x1 = COLS[col]
+                page.insert_htmlbox(pymupdf.Rect(x0, y, x1, y + h + 2), html, css=CSS,
+                                    archive=arc)
+        if n == n_pages:
             last_page_block(page, info, marks)
         footer(page, info, n)
-    doc.set_metadata({"title": f"{info['grade']}학년 {info['subject']} {info['exam']} 시험지 양식"})
+    doc.set_metadata({"title": f"{info['grade']}학년 {info['subject']} {info['exam']} 시험지"})
     doc.subset_fonts()
     doc.save(os.path.join(HERE, out), garbage=4, deflate=True)
-    print("saved", out)
+    print("saved", out, n_pages, "pages,", len(Q), "questions")
 
 
 if __name__ == "__main__":
