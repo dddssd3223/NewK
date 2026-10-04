@@ -34,13 +34,16 @@ def cell(page, r, lines, size=9, fill=None, lw=0.6):
         y += lead
 
 
-NOTE8 = [
-    "1) 8번: 표준 발음상 ‘무력(無力)[무력]’은 짧은소리이고 ‘성인(成人)[성인]’도 짧은소리(‘성ː인’은",
-    "聖人)이므로, 바르게 발음한 사람은 ‘을, 병’이 된다. 이 조합이 선지에 없어 원 정답(③ 병, 무)을",
-    "그대로 두었다. 채점 시 문항 정정(‘무’의 예를 ‘성ː인(聖人)’으로 교체) 또는 전원 정답 처리를 검토할 것.",
+# 문제지 정정 (이미 인쇄된 문제지의 고칠 부분): (번호, 위치, 인쇄된 내용, 바른 내용)
+PAPER_FIX = [
+    (8, "<보기> 정", "함박눈ː[雪]", "함박눈[雪] (장음 표시 삭제, 입력 오류)"),
+    (17, "발문", "…적용되는 문장을 모두 고르면?", "…적용되는 문장은?"),
+    (28, "발문", "…적절하지 않은 것을 모두 고르면?", "…적절하지 않은 것은?"),
 ]
 
-ERRATA = [  # (번호, 수정 전, 수정 후, 사유)
+# 정답 정정: (번호, 수정 전, 수정 후, 사유)
+ERRATA = [
+    (8, "③", "⑤", "원문은 ‘함박눈[雪]’(짧은소리)으로 정이 바르게 발음함. ‘무력(無力)’은 짧은소리, ‘성인(成人)’도 짧은소리이므로 을·병·정이 바름"),
     (17, "④, ⑤", "④", "⑤ ‘똑같이[똑까치]’는 구개음화·된소리되기만 일어나며 음절의 끝소리 규칙이 적용되지 않음"),
     (19, "⑤", "②", "㉢의 예 ‘횡단로[횡단노]’는 제19항이 아닌 제20항 ‘다만’의 예외 단어이므로 ㉢은 적절하지 않음"),
     (24, "②", "④", "‘물동이[물똥이]’는 고유어 합성어로 제26항(한자어 ㄹ 받침 뒤)의 용례가 아님. ② ‘삶자[삼ː짜]’는 제24항에 해당"),
@@ -62,6 +65,34 @@ def wrap(s, size, width):
     return out + [cur] if cur else out
 
 
+def table(page, y, cols, rows, size=8.8, lead=12):
+    """cols: [(머리글, 너비)], rows: [[칸 글...]]. 마지막 칸만 여러 줄로 감싼다."""
+    L = 49.0
+    x = L
+    for name, w in cols:
+        cell(page, pymupdf.Rect(x, y, x + w, y + 22), [name], 9, SHADE)
+        x += w
+    top, y = y, y + 22
+    for row in rows:
+        wrapped = [wrap(t, size, w - 10) for t, (_, w) in zip(row, cols)]
+        h = max(26, lead * max(len(t) for t in wrapped) + 10)
+        x = L
+        for k, ((_, w), lines) in enumerate(zip(cols, wrapped)):
+            r = pymupdf.Rect(x, y, x + w, y + h)
+            if k < len(cols) - 1:
+                cell(page, r, lines, 9.2)
+            else:
+                page.draw_rect(r, color=BLACK, width=0.6)
+                ty = y + (h - lead * len(lines)) / 2 + size
+                for ln in lines:
+                    put(page, x + 5, ty, ln, size, anchor="l")
+                    ty += lead
+            x += w
+        y += h
+    page.draw_rect(pymupdf.Rect(L, top, x, y), color=BLACK, width=1.4)
+    return y
+
+
 def errata_page(doc):
     page = doc.new_page(width=595, height=842)
     L, R = 49.0, 541.0
@@ -69,41 +100,16 @@ def errata_page(doc):
     put(page, 114, 96, title, 13, anchor="l")
     tw = pymupdf.Font(fontfile=FONTS[FONT]).text_length(title, fontsize=13)
     page.draw_line((112, 103), (114 + tw + 4, 103), color=BLACK, width=0.8, dashes="[1 1.5] 0")
-    put(page, 55, 125, "제공된 정답지를 문제와 대조하여 바로잡은 내역입니다.", 10, anchor="l")
 
-    cols = [("번호", 34), ("수정 전", 52), ("수정 후", 52), ("사유", R - L - 138)]
-    y = 150
-    x = L
-    for name, w in cols:
-        cell(page, pymupdf.Rect(x, y, x + w, y + 22), [name], 9, SHADE)
-        x += w
-    y += 22
-    size, lead = 8.8, 12
-    for no, a, b, why in ERRATA:
-        lines = wrap(why, size, cols[3][1] - 10)
-        h = max(26, lead * len(lines) + 10)
-        x = L
-        for (name, w), val in zip(cols[:3], (f"{no}", a, b)):
-            cell(page, pymupdf.Rect(x, y, x + w, y + h), [val], 9.5)
-            x += w
-        r = pymupdf.Rect(x, y, R, y + h)
-        page.draw_rect(r, color=BLACK, width=0.6)
-        ty = y + (h - lead * len(lines)) / 2 + size
-        for ln in lines:
-            put(page, x + 5, ty, ln, size, anchor="l")
-            ty += lead
-        y += h
-    page.draw_rect(pymupdf.Rect(L, 150, R, y), color=BLACK, width=1.4)
+    put(page, L, 132, "1. 문제지 정정 (인쇄된 문제지에서 고칠 부분)", 10.5, anchor="l")
+    y = table(page, 142, [("번호", 34), ("위치", 62), ("인쇄된 내용", 170), ("바른 내용", R - L - 266)],
+              [[str(n), w, a, b] for n, w, a, b in PAPER_FIX])
 
-    y += 24
-    put(page, L, y, "보류 문항", 10, anchor="l")
-    y += 16
-    for k, t in enumerate(["8번: 정답 ③ 유지 (정답지 1쪽 각주 1) 참조). 선지 중 ‘을, 병’ 조합이 없어 정답만으로는",
-                           "      바로잡을 수 없으므로 문항 정정 또는 전원 정답 처리를 검토할 것."]):
-        put(page, L, y + k * 13, t, 9, anchor="l")
-    y += 40
-    for k, t in enumerate(["※ 17·28번은 정답이 하나로 바뀌었으나 발문(“모두 고르면?”)은 그대로 두었다."]):
-        put(page, L, y + k * 13, t, 9, anchor="l")
+    y += 30
+    put(page, L, y, "2. 정답 정정", 10.5, anchor="l")
+    y = table(page, y + 10, [("번호", 34), ("수정 전", 52), ("수정 후", 52), ("사유", R - L - 138)],
+              [[str(n), a, b, why] for n, a, b, why in ERRATA])
+    put(page, L, y + 20, "※ 정답 정정 내용은 정답지 1쪽 정답표에 반영되어 있음.", 9, anchor="l")
 
 
 def main(out="정답지.pdf"):
@@ -143,7 +149,7 @@ def main(out="정답지.pdf"):
         nums = range(start, min(start + PER_ROW, n))
         rows = [("번호", [str(i + 1) for i in nums], 18, SHADE),
                 ("배점", [f"{PTS[i]:.1f}" for i in nums], 20, None),
-                ("정답", [ANS[i] + ("¹⁾" if i == 7 else "") for i in nums], 24, None)]
+                ("정답", [ANS[i] for i in nums], 24, None)]
         for lab, items, h, fill in rows:
             cell(page, pymupdf.Rect(L, y, L + lab_w, y + h), [lab], 9, SHADE)
             for k, t in enumerate(items):
@@ -159,12 +165,7 @@ def main(out="정답지.pdf"):
         "인정합니다.", 9, anchor="l")
     put(page, L, y + 22, f"※ 선택형 {n}문항, 총 {total:g}점 (문항별 배점은 위 표 참조)", 9, anchor="l")
 
-    # 각주: 8번
-    fy = y + 46
-    page.draw_line((L, fy - 10), (L + 120, fy - 10), color=BLACK, width=0.5)
-    for k, t in enumerate(NOTE8):
-        put(page, L + (0 if k == 0 else 12), fy + k * 12.5, t, 8.5, anchor="l")
-    put(page, L, fy + len(NOTE8) * 12.5 + 8, "※ 정답 수정 내역은 2쪽 정오표 참조", 8.5, anchor="l")
+    put(page, L, y + 38, "※ 문제지 정정 및 정답 정정 내역은 2쪽 정오표 참조", 9, anchor="l")
 
     errata_page(doc)
 
