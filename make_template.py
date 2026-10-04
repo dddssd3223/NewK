@@ -1,11 +1,10 @@
-"""양정고 정기고사 시험지 양식(양식 복사본.pdf)을 따라 만든 2학년 문학 빈 시험지 양식 PDF 생성기.
+"""양정고 정기고사 시험지 양식(양식 복사본.pdf)을 따라 만든 2학년 화법과 언어 빈 시험지 양식 PDF 생성기.
 
 사용법:  python3 make_template.py            -> 시험지_양식.pdf
 필요:    pip install pymupdf fonttools
 글꼴:    gulim.ttc(굴림/굴림체). 학교 로고·꼬리말 엠블럼·이모티콘은 assets/ 의 원본 양식에서 잘라 낸 것을 쓴다.
 좌표는 모두 원본 양식 PDF와 같은 pt 단위(왼쪽 위 기준)이다.
 """
-import json
 import os
 
 import pymupdf
@@ -21,7 +20,7 @@ INFO = {
     "school": "양정고등학교",
     "school_spaced": "양 정 고 등 학 교",
     "grade": "2",
-    "subject": "문학",
+    "subject": "화법과 언어",
     "exam": "중간고사",
     "date": "2026년 4월 27일(월)",
     "period": "1교시",
@@ -66,15 +65,8 @@ def font_files():
 
 
 FONTS = font_files()
-FONTS["HY"] = os.path.join(HERE, "HYGothic-Extra.TTF")  # HY견고딕 (머리글)
+FONTS["Title"] = os.path.join(HERE, "HYGothic-Extra.TTF")  # 제목: HY견고딕
 METRICS = {k: pymupdf.Font(fontfile=v) for k, v in FONTS.items()}
-_HY = TTFont(FONTS["HY"])
-_HY_CMAP, _HY_UPM = _HY.getBestCmap(), _HY["head"].unitsPerEm
-
-
-def hy_lsb(ch):
-    """HY견고딕 글자의 왼쪽 여백(em 비율) — 잉크 시작 위치를 맞출 때 쓴다."""
-    return _HY["hmtx"][_HY_CMAP[ord(ch)]][1] / _HY_UPM
 
 
 SPACE = 0.5  # 본문 공백 폭(글자 크기 비율). 원본 양식(한글 문서)과 같다.
@@ -144,40 +136,47 @@ def ink_bounds(s, font):
     return lsb or 0, ymin
 
 
-def scan_text(page, s, ink_left_px, ink_bottom_px, size, font="HY", xscale=1.0, stroke=0.0):
+def scan_text(page, s, ink_left_px, ink_bottom_px, size, font, stroke=0.0):
     """글자 잉크의 왼쪽·아래 끝이 스캔의 (ink_left_px, ink_bottom_px)에 오도록 쓴다.
-    xscale 은 한글 문서의 장평(가로 비율), stroke 는 굵게(외곽선, 글자 크기 비율)."""
+    stroke 는 굵게(외곽선 두께, 글자 크기 비율)."""
     lsb, ymin = ink_bounds(s, font)
-    x = sx(ink_left_px) - lsb * size * xscale
+    x = sx(ink_left_px) - lsb * size
     y = sy(ink_bottom_px + 0.5) + ymin * size
     kw = dict(fontname=font, fontfile=FONTS[font], fontsize=size, color=BLACK)
     if stroke:
         kw.update(fill=BLACK, render_mode=2, border_width=stroke)
-    if xscale != 1.0:
-        kw["morph"] = (pymupdf.Point(x, y), pymupdf.Matrix(xscale, 1))
     page.insert_text((x, y), s, **kw)
 
 
-_GLYPH_FILE = os.path.join(ASSETS, "header_glyphs.json")
-GLYPHS = json.load(open(_GLYPH_FILE)) if os.path.exists(_GLYPH_FILE) else {}
+# 제목: HY견고딕. 원본 스캔의 글자 높이(약 38px)에 맞춘 크기와 장평(가로 비율).
+TITLE_SIZE, TITLE_X = 21.0, 0.955
+TITLE_LEFT, TITLE_RIGHT_MAX = 219, 830   # 제목이 들어갈 스캔 x 범위 (오른쪽은 시행일 앞)
+TITLE_GAPS = (22, 28, 28, 20)            # 낱말 사이 간격(px): 2|학년|과목|중간고사|문제
+SUBJECT_SPACE = 12                       # 과목명 안의 띄어쓰기(px)
 
 
-def draw_glyphs(page, curves):
-    """스캔 좌표(px)로 저장된 글자 외곽선을 양식 좌표로 옮겨 검게 채운다 (구멍은 짝홀 규칙)."""
-    P = lambda q: pymupdf.Point(sx(q[0]), sy(q[1]))
-    sh = page.new_shape()
-    for c in curves:
-        cur = P(c["start"])
-        for seg in c["segs"]:
-            if seg[0] == "L":
-                sh.draw_line(cur, P(seg[1]))
-                sh.draw_line(P(seg[1]), P(seg[2]))
-                cur = P(seg[2])
-            else:
-                sh.draw_bezier(cur, P(seg[1]), P(seg[2]), P(seg[3]))
-                cur = P(seg[3])
-    sh.finish(color=None, fill=BLACK, even_odd=True, closePath=True)
-    sh.commit()
+def title(page, info):
+    """제목: '2 학년  <과목>  중간고사 문제'"""
+    m = METRICS["Title"]
+    size_px = TITLE_SIZE / SCAN_K
+    px = lambda s: m.text_length(s, fontsize=size_px)       # 글자 폭(스캔 px, 장평 전)
+    words = [info["grade"], "학년", info["subject"], info["exam"], "문제"]
+    total = sum(px(p) * TITLE_X for w in words for p in w.split(" "))
+    total += sum(TITLE_GAPS) + SUBJECT_SPACE * (len(info["subject"].split(" ")) - 1)
+    lsb = ink_bounds(words[0], "Title")[0] * size_px * TITLE_X
+    k = min(1.0, (TITLE_RIGHT_MAX - TITLE_LEFT + lsb) / total)  # 길면 전체를 함께 줄인다
+    x = TITLE_LEFT - lsb * k
+    y = sy(237.5) + ink_bounds("학", "Title")[1] * TITLE_SIZE
+    for i, w in enumerate(words):
+        for j, part in enumerate(w.split(" ")):
+            if j:
+                x += SUBJECT_SPACE * k
+            page.insert_text((sx(x), y), part, fontname="Title", fontfile=FONTS["Title"],
+                             fontsize=TITLE_SIZE, color=BLACK,
+                             morph=(pymupdf.Point(sx(x), y), pymupdf.Matrix(TITLE_X * k, 1)))
+            x += px(part) * TITLE_X * k
+        if i < len(TITLE_GAPS):
+            x += TITLE_GAPS[i] * k
 
 
 def header(page, info):
@@ -185,52 +184,25 @@ def header(page, info):
     cx, cy = sx(161.5), sy(211.5)
     page.insert_image(pymupdf.Rect(cx - 18.3, cy - 17.45, cx + 18.3, cy + 17.45),
                       filename=os.path.join(ASSETS, "logo.jpeg"))
-    # 제목: 원본 글꼴과 똑같도록 스캔에서 따낸 외곽선(trace_header.py)을 그린다.
-    if GLYPHS.get("title"):
-        draw_glyphs(page, GLYPHS["title"])
-    else:
-        title_with_font(page, info)
-    header_rest(page, info)
-
-
-def title_with_font(page, info):
-    """따낸 외곽선이 없을 때: HY견고딕(장평 약 95%)으로 쓴다."""
-    s1, s2 = info["subject"][0], info["subject"][1:]
-    for s, px in ((info["grade"], 219), ("학년", 262), (s1, 380), (s2, 460),
-                  (info["exam"], 538), ("문제", 716)):
-        if s:
-            if s.isdigit():  # 숫자는 한글보다 작게 찍혀 있다
-                scan_text(page, s, px, 234, DIGIT_SIZE)
-            else:
-                scan_text(page, s, px, 239, TITLE_SIZE, xscale=TITLE_X)
-
-
-def header_rest(page, info):
-    # 시행일·과정 줄도 따낸 외곽선이 있으면 그것을, 없으면 글꼴로 쓴다.
-    if GLYPHS.get("date"):
-        draw_glyphs(page, GLYPHS["date"])
-    else:  # 스캔 x 863~1101px, 아래끝 245px
-        scan_text(page, f"시행일 {info['date']} - {info['period']}", 863, 245, DATE_SIZE,
-                  font="Gulim", xscale=DATE_X, stroke=DATE_STROKE)
+    title(page, info)
+    # 시행일: 굴림체 (스캔 x 863px 부터, 아래끝 245px)
+    scan_text(page, f"시행일 {info['date']} - {info['period']}", 863, 245, DATE_SIZE,
+              "GulimChe", stroke=DATE_STROKE)
     # 굵은 띠 (스캔 x 101~1123px, y 248~257px)
     page.draw_rect(pymupdf.Rect(sx(101), sy(248), sx(1123.5), sy(257.5)), color=None,
                    fill=BLACK)
-    if GLYPHS.get("meta"):
-        draw_glyphs(page, GLYPHS["meta"])
-        return
-    # 과정·과목코드 줄: 굵은 굴림 — 토큰별 잉크 시작 위치는 스캔에서 잰 값
+    # 과정·과목코드 줄: 굵은 굴림체 — 토큰별 잉크 시작 위치는 스캔에서 잰 값
     for s, px in (("과", 187), ("정", 211), (":", 235), (f"( {info['course'].split()[0]}", 248),
                   ("개정", 306), ("교육과정", 346), (")", 417),
                   ("과목코드", 463), (":", 535), (f"( {info['code']}", 547), (")", 587),
                   ("이수단위", 632), (":", 704), ("(", 717), (info["credits"], 730), (")", 747),
                   ("문항수", 793), ("(", 849), ("선택형:", 863),
                   (f"{info['n_choice']} 서답형:", 923), (str(info["n_essay"]), 1010), (")", 1035)):
-        scan_text(page, s, px, 273, META_SIZE, font="Gulim", xscale=META_X, stroke=META_STROKE)
+        scan_text(page, s, px, 273, META_SIZE, "GulimChe", stroke=META_STROKE)
 
 
-TITLE_SIZE, TITLE_X, DIGIT_SIZE = 21.0, 0.955, 19.1
-DATE_SIZE, DATE_X, DATE_STROKE = 6.96, 1.067, 0.04
-META_SIZE, META_X, META_STROKE = 8.0, 1.0, 0.045
+DATE_SIZE, DATE_STROKE = 14.3 * SCAN_K, 0.04   # 굴림체 1em = 스캔 14.3px
+META_SIZE, META_STROKE = 16 * SCAN_K, 0.045    # 굴림체 1em = 스캔 16px
 
 
 def frame(page):
@@ -242,10 +214,12 @@ def frame(page):
     line(page, (297.6, 153.1), (297.6, 770.0), 0.36)  # 단 구분선
 
 
-def footer(page, info, n, emblem):
+def footer(page, info, n):
     y = 808.2
     text(page, 49.1, y, f"이 시험문제의 저작권은 {info['school']}에 있습니다.", space=NARROW)
-    page.show_pdf_page(pymupdf.Rect(244.5, 792.5, 264.2, 811.8), emblem, 0)
+    page.draw_circle((254.25, 802.05), 8.3, color=BLACK, width=0.96)  # 꼬리말 엠블럼
+    page.insert_text((254.25 - 5.2, 806.0), "고", fontname="Title", fontfile=FONTS["Title"],
+                     fontsize=10.4, color=BLACK)
     text(page, 263.0, y, f"  {info['school_spaced']} <{info['pages']}-{n}>", space=SPACE)
     text(page, 548.8 - NARROW * 8.04, y, "무단 복제 및 전재, 상업적 이용을 금지합니다.",
          anchor="r", space=NARROW)
@@ -271,9 +245,9 @@ def first_page_block(page, info):
     line(page, (42.5, 331.8), (294.2, 331.8), 1.44)
 
 
-def last_page_block(page, info, smile):
+def last_page_block(page, info, marks):
     text(page, 358.1, 634.3, "수고하셨습니다", size=19.8, space=NARROW)
-    page.show_pdf_page(pymupdf.Rect(390, 640, 470, 668), smile, 0)
+    page.show_pdf_page(pymupdf.Rect(390, 640, 470, 668), marks, 0)
     text(page, 355.4, 694.8,
          f"선택형 {info['n_choice']:>2}문제 = {info['choice_score']}점", size=13.8,
          space=NARROW)
@@ -284,8 +258,7 @@ def last_page_block(page, info, smile):
 
 def main(out="시험지_양식.pdf"):
     info = INFO
-    emblem = pymupdf.open(os.path.join(ASSETS, "footer_emblem.pdf"))
-    smile = pymupdf.open(os.path.join(ASSETS, "smile.pdf"))
+    marks = pymupdf.open(os.path.join(ASSETS, "marks.pdf"))  # 마지막 쪽 이모티콘
     doc = pymupdf.open()
     for n in range(1, info["pages"] + 1):
         page = doc.new_page(width=595, height=842)
@@ -294,8 +267,8 @@ def main(out="시험지_양식.pdf"):
         if n == 1:
             first_page_block(page, info)
         if n == info["pages"]:
-            last_page_block(page, info, smile)
-        footer(page, info, n, emblem)
+            last_page_block(page, info, marks)
+        footer(page, info, n)
     doc.set_metadata({"title": f"{info['grade']}학년 {info['subject']} {info['exam']} 시험지 양식"})
     doc.subset_fonts()
     doc.save(os.path.join(HERE, out), garbage=4, deflate=True)
