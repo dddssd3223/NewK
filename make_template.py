@@ -5,6 +5,7 @@
 글꼴:    gulim.ttc(굴림/굴림체). 학교 로고·꼬리말 엠블럼·이모티콘은 assets/ 의 원본 양식에서 잘라 낸 것을 쓴다.
 좌표는 모두 원본 양식 PDF와 같은 pt 단위(왼쪽 위 기준)이다.
 """
+import json
 import os
 
 import pymupdf
@@ -157,12 +158,43 @@ def scan_text(page, s, ink_left_px, ink_bottom_px, size, font="HY", xscale=1.0, 
     page.insert_text((x, y), s, **kw)
 
 
+_GLYPH_FILE = os.path.join(ASSETS, "header_glyphs.json")
+GLYPHS = json.load(open(_GLYPH_FILE)) if os.path.exists(_GLYPH_FILE) else {}
+
+
+def draw_glyphs(page, curves):
+    """스캔 좌표(px)로 저장된 글자 외곽선을 양식 좌표로 옮겨 검게 채운다 (구멍은 짝홀 규칙)."""
+    P = lambda q: pymupdf.Point(sx(q[0]), sy(q[1]))
+    sh = page.new_shape()
+    for c in curves:
+        cur = P(c["start"])
+        for seg in c["segs"]:
+            if seg[0] == "L":
+                sh.draw_line(cur, P(seg[1]))
+                sh.draw_line(P(seg[1]), P(seg[2]))
+                cur = P(seg[2])
+            else:
+                sh.draw_bezier(cur, P(seg[1]), P(seg[2]), P(seg[3]))
+                cur = P(seg[3])
+    sh.finish(color=None, fill=BLACK, even_odd=True, closePath=True)
+    sh.commit()
+
+
 def header(page, info):
     # 학교 로고: 스캔에서 x 132~194px, y 179~241px
     cx, cy = sx(161.5), sy(211.5)
     page.insert_image(pymupdf.Rect(cx - 18.3, cy - 17.45, cx + 18.3, cy + 17.45),
                       filename=os.path.join(ASSETS, "logo.jpeg"))
-    # 제목: HY견고딕, 장평 약 95% — 낱말별 잉크 시작 위치는 스캔에서 잰 값
+    # 제목: 원본 글꼴과 똑같도록 스캔에서 따낸 외곽선(trace_header.py)을 그린다.
+    if GLYPHS.get("title"):
+        draw_glyphs(page, GLYPHS["title"])
+    else:
+        title_with_font(page, info)
+    header_rest(page, info)
+
+
+def title_with_font(page, info):
+    """따낸 외곽선이 없을 때: HY견고딕(장평 약 95%)으로 쓴다."""
     s1, s2 = info["subject"][0], info["subject"][1:]
     for s, px in ((info["grade"], 219), ("학년", 262), (s1, 380), (s2, 460),
                   (info["exam"], 538), ("문제", 716)):
@@ -171,12 +203,21 @@ def header(page, info):
                 scan_text(page, s, px, 234, DIGIT_SIZE)
             else:
                 scan_text(page, s, px, 239, TITLE_SIZE, xscale=TITLE_X)
-    # 시행일 (스캔 x 863~1101px, 아래끝 245px)
-    scan_text(page, f"시행일 {info['date']} - {info['period']}", 863, 245, DATE_SIZE,
-              font="Gulim", xscale=DATE_X, stroke=DATE_STROKE)
+
+
+def header_rest(page, info):
+    # 시행일·과정 줄도 따낸 외곽선이 있으면 그것을, 없으면 글꼴로 쓴다.
+    if GLYPHS.get("date"):
+        draw_glyphs(page, GLYPHS["date"])
+    else:  # 스캔 x 863~1101px, 아래끝 245px
+        scan_text(page, f"시행일 {info['date']} - {info['period']}", 863, 245, DATE_SIZE,
+                  font="Gulim", xscale=DATE_X, stroke=DATE_STROKE)
     # 굵은 띠 (스캔 x 101~1123px, y 248~257px)
     page.draw_rect(pymupdf.Rect(sx(101), sy(248), sx(1123.5), sy(257.5)), color=None,
                    fill=BLACK)
+    if GLYPHS.get("meta"):
+        draw_glyphs(page, GLYPHS["meta"])
+        return
     # 과정·과목코드 줄: 굵은 굴림 — 토큰별 잉크 시작 위치는 스캔에서 잰 값
     for s, px in (("과", 187), ("정", 211), (":", 235), (f"( {info['course'].split()[0]}", 248),
                   ("개정", 306), ("교육과정", 346), (")", 417),
