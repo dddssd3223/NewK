@@ -5,7 +5,9 @@
 글꼴:    gulim.ttc(굴림/굴림체). 학교 로고·꼬리말 엠블럼·이모티콘은 assets/ 의 원본 양식에서 잘라 낸 것을 쓴다.
 좌표는 모두 원본 양식 PDF와 같은 pt 단위(왼쪽 위 기준)이다.
 """
+import importlib
 import os
+import sys
 import shutil
 import re
 import zipfile
@@ -489,8 +491,9 @@ def draw_q09(page, rect):
 FIGURES = {"q09": draw_q09}
 
 
-def main(out="시험지_양식.pdf"):
-    from questions import PTS, Q
+def main(out="시험지_양식.pdf", qmod="questions"):
+    mod = importlib.import_module(qmod)
+    PTS, Q = mod.PTS, mod.Q
     info = dict(INFO, n_choice=len(Q), choice_score=f"{sum(PTS):g}")
     arc = archive()
     slots, n_pages = layout(Q, PTS, arc)
@@ -525,4 +528,5 @@ def main(out="시험지_양식.pdf"):
 
 
 if __name__ == "__main__":
-    main()
+    # python3 make_template.py [문항 모듈] [출력 파일]  예) mock1_questions 실전1회_문제지.pdf
+    main(*(sys.argv[2:3] or ["시험지_양식.pdf"]), *(sys.argv[1:2] or ["questions"]))

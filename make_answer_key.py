@@ -7,8 +7,10 @@ import os
 
 import pymupdf
 
+import importlib
+import sys
+
 from make_template import FONTS, HERE, INFO
-from questions import ANS, PTS, Q
 
 FONT = "Body"                 # 함초롱바탕 (본문과 같은 글꼴)
 BLACK = (0, 0, 0)
@@ -112,7 +114,9 @@ def errata_page(doc):
     put(page, L, y + 20, "※ 정답 정정 내용은 정답지 1쪽 정답표에 반영되어 있음.", 9, anchor="l")
 
 
-def main(out="정답지.pdf"):
+def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=PER_ROW):
+    mod = importlib.import_module(qmod)
+    ANS, PTS, Q = mod.ANS, mod.PTS, mod.Q
     n = len(Q)
     total = sum(PTS)
     doc = pymupdf.open()
@@ -120,7 +124,7 @@ def main(out="정답지.pdf"):
     L, R = 49.0, 541.0
 
     # 제목·시행일 (원본 정답표처럼 점선 밑줄)
-    title = f"{INFO['grade']}학년 ({INFO['subject']})"
+    title = f"{INFO['grade']}학년 ({INFO['subject']}){' ' + label if label else ''}"
     put(page, 114, 96, title, 13, anchor="l")
     tw = pymupdf.Font(fontfile=FONTS[FONT]).text_length(title, fontsize=13)
     page.draw_line((112, 103), (114 + tw + 4, 103), color=BLACK, width=0.8, dashes="[1 1.5] 0")
@@ -144,9 +148,9 @@ def main(out="정답지.pdf"):
     # 정답 표: 번호 / 배점 / 정답 (14문항씩)
     y = y0 + 86
     lab_w = 42
-    cw = (R - L - lab_w) / PER_ROW
-    for start in range(0, n, PER_ROW):
-        nums = range(start, min(start + PER_ROW, n))
+    cw = (R - L - lab_w) / per_row
+    for start in range(0, n, per_row):
+        nums = range(start, min(start + per_row, n))
         rows = [("번호", [str(i + 1) for i in nums], 18, SHADE),
                 ("배점", [f"{PTS[i]:.1f}" for i in nums], 20, None),
                 ("정답", [ANS[i] for i in nums], 24, None)]
@@ -160,14 +164,22 @@ def main(out="정답지.pdf"):
         y += 16
 
     # 비고
+    notes = []
     multi = [str(i + 1) for i, a in enumerate(ANS) if "," in a]
-    put(page, L, y + 6, f"※ {'·'.join(multi)}번은 복수 정답 문항으로, 정답을 모두 골라야 정답으로 "
-        "인정합니다.", 9, anchor="l")
-    put(page, L, y + 22, f"※ 선택형 {n}문항, 총 {total:g}점 (문항별 배점은 위 표 참조)", 9, anchor="l")
+    if multi:
+        notes.append(f"※ {'·'.join(multi)}번은 복수 정답 문항으로, 정답을 모두 골라야 정답으로 인정합니다.")
+    notes.append(f"※ 선택형 {n}문항, 총 {total:g}점 (문항별 배점은 위 표 참조)")
+    if errata:
+        notes.append("※ 문제지 정정 및 정답 정정 내역은 2쪽 정오표 참조")
+    if getattr(mod, "EXPL", None):
+        notes.append("※ 문항별 해설과 함정 포인트는 다음 쪽 참조")
+    for k, t in enumerate(notes):
+        put(page, L, y + 6 + 16 * k, t, 9, anchor="l")
 
-    put(page, L, y + 38, "※ 문제지 정정 및 정답 정정 내역은 2쪽 정오표 참조", 9, anchor="l")
-
-    errata_page(doc)
+    if errata:
+        errata_page(doc)
+    if getattr(mod, "EXPL", None):
+        explanation_pages(doc, title, ANS, PTS, mod.EXPL)
 
     doc.set_metadata({"title": f"{title} 정답지"})
     doc.subset_fonts()
@@ -175,5 +187,47 @@ def main(out="정답지.pdf"):
     print("saved", out)
 
 
+def explanation_pages(doc, title, ANS, PTS, EXPL):
+    """문항별 정답·해설. 2단 대신 한 단으로, 페이지가 차면 다음 쪽으로 넘긴다."""
+    L, R, top, bottom = 49.0, 541.0, 140.0, 790.0
+    size, lead = 8.8, 12.4
+
+    def new_page():
+        page = doc.new_page(width=595, height=842)
+        head = f"{title} 정답 및 해설"
+        put(page, 114, 96, head, 13, anchor="l")
+        tw = pymupdf.Font(fontfile=FONTS[FONT]).text_length(head, fontsize=13)
+        page.draw_line((112, 103), (114 + tw + 4, 103), color=BLACK, width=0.8, dashes="[1 1.5] 0")
+        return page
+
+    page, y = new_page(), top
+    for i, (a, pt, ex) in enumerate(zip(ANS, PTS, EXPL), 1):
+        body = []
+        for part in ex.split(" [함정] "):
+            body.append(part)
+        lines = wrap(body[0], size, R - L - 70)
+        trap = wrap("[함정] " + body[1], size, R - L - 70) if len(body) > 1 else []
+        h = lead * (len(lines) + len(trap)) + 10
+        if y + h > bottom:
+            page, y = new_page(), top
+        cell(page, pymupdf.Rect(L, y - 2, L + 62, y + 16), [f"{i}번  {a}"], 9.5, SHADE)
+        put(page, L + 31, y + 30, f"({pt:.1f}점)", 7.5)
+        ty = y + 10
+        for ln in lines:
+            put(page, L + 70, ty, ln, size, anchor="l")
+            ty += lead
+        for ln in trap:
+            page.insert_text((L + 70, ty), ln, fontname=FONT, fontfile=FONTS[FONT], fontsize=size,
+                             color=(0.6, 0.1, 0.1))
+            ty += lead
+        y = max(ty, y + 36) + 8
+        page.draw_line((L, y - 4), (R, y - 4), color=(0.75, 0.75, 0.75), width=0.4)
+
+
 if __name__ == "__main__":
-    main()
+    # python3 make_answer_key.py                       -> 학교 프린트 정답지(정오표 포함)
+    # python3 make_answer_key.py mock1_questions 실전1회_정답지.pdf "실전 1회"
+    if len(sys.argv) > 1:
+        main(sys.argv[2], sys.argv[1], sys.argv[3] if len(sys.argv) > 3 else "", errata=False, per_row=12)
+    else:
+        main()
