@@ -106,9 +106,9 @@ def text(page, x, y, s, font="Gulim", size=8.04, anchor="l", stroke=0.025, space
         if i:
             x += space * size
         if run:
+            kw = dict(fill=BLACK, render_mode=2, border_width=stroke) if stroke else {}
             page.insert_text((x, y), run, fontname=font, fontfile=FONTS[font],
-                             fontsize=size, color=BLACK, fill=BLACK, render_mode=2,
-                             border_width=stroke)
+                             fontsize=size, color=BLACK, **kw)
             x += width(run, font, size)
     return x
 
@@ -277,8 +277,8 @@ def last_page_block(page, info, marks):
 # ── 문제 배치 ──────────────────────────────────────────────
 # 본문 글꼴은 원본 문학 시험지와 같은 함초롱바탕. 크기 8.05pt 는 스캔의 글자 높이(줄당
 # 약 15px)와 줄바꿈 위치가 같아지는 값이고, 줄 간격 12.2pt 는 스캔의 24px 에 맞춘 것이다.
-# 원본처럼 획이 진하도록 배치 후 문제 글자를 채우기+외곽선으로 그린다(BODY_STROKE).
-BODY_STROKE = 0.16
+# BODY_STROKE 를 0 보다 크게 하면 문제 글자를 채우기+외곽선으로 진하게 그린다 (기본: 원래 굵기).
+BODY_STROKE = 0
 CSS = """
 @font-face { font-family: W; src: url(HCRBatangR.ttf); }
 @font-face { font-family: D; src: url(Dotum.ttf); }
@@ -461,7 +461,7 @@ def draw_q09(page, rect):
             left, right = rect.x0 + (x0 + 14) * k, rect.x0 + (x1 - 12) * k
             chars = list(row)
             if i == len(rows) - 1 or len(chars) < 2:   # 마지막 줄은 왼쪽 정렬
-                text(page, left, y, row, font=font, size=size)
+                text(page, left, y, row, font=font, size=size, stroke=0)
                 continue
             # 원본처럼 글자를 칸 너비에 고르게 벌린다
             widths = [width(c, font, size) for c in chars]
@@ -469,11 +469,11 @@ def draw_q09(page, rect):
             x = left
             for c, w in zip(chars, widths):
                 if c != " ":
-                    text(page, x, y, c, font=font, size=size)
+                    text(page, x, y, c, font=font, size=size, stroke=0)
                 x += w + gap
     for ch, cx, cy, circled in Q09_JAMO:
         c = P(cx, cy)
-        text(page, c.x, c.y + 3.0, ch, font=font, size=8.2, anchor="c")
+        text(page, c.x, c.y + 3.0, ch, font=font, size=8.2, anchor="c", stroke=0)
         if circled:
             page.draw_circle(c, 18 * k, color=BLACK, width=0.5, dashes="[1 1] 0")
     for (ax, ay), (bx, by) in Q09_ARROWS:
@@ -516,7 +516,8 @@ def main(out="시험지_양식.pdf"):
         if n == n_pages:
             last_page_block(page, info, marks)
         footer(page, info, n)
-    thicken_question_text(doc)
+    if BODY_STROKE:
+        thicken_question_text(doc)
     doc.set_metadata({"title": f"{info['grade']}학년 {info['subject']} {info['exam']} 시험지"})
     doc.subset_fonts()
     doc.save(os.path.join(HERE, out), garbage=4, deflate=True)
