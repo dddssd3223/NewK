@@ -8,6 +8,7 @@
 import os
 
 import pymupdf
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTCollection, TTFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -107,8 +108,8 @@ def line(page, p0, p1, w):
 
 
 # ── 공통 틀 ────────────────────────────────────────────────
-# 머리글은 원본 문학 시험지(스캔)에 맞춘다. 스캔 좌표(px) -> 양식 좌표(pt) 변환:
-# 스캔 본문 테두리 왼쪽 77px, 위 282px 가 양식의 34pt, 144.6pt 에 오도록 맞춘 배율.
+# 머리글은 원본 문학 시험지(스캔, 144dpi)에 맞춘다. 스캔 좌표(px) -> 양식 좌표(pt):
+# 스캔 본문 테두리 왼쪽 77px, 위 277.5px 가 양식의 34pt, 144.6pt 에 오도록 맞춘 배율.
 SCAN_K = 527.2 / 1036
 
 
@@ -117,42 +118,78 @@ def sx(px):
 
 
 def sy(py):
-    return 144.6 + (py - 282) * SCAN_K
+    return 144.6 + (py - 277.5) * SCAN_K
 
 
-def ink_text(page, ink_px, baseline, s, size, font="HY"):
-    """잉크(글자 모양)의 왼쪽 끝이 스캔의 ink_px 에 오도록 HY견고딕으로 쓴다."""
-    x = sx(ink_px) - hy_lsb(s[0]) * size
-    page.insert_text((x, baseline), s, fontname=font, fontfile=FONTS[font], fontsize=size,
-                     color=BLACK)
+_TT = {}
+
+
+def ink_bounds(s, font):
+    """문자열 s 의 첫 글자 왼쪽 잉크 위치와 전체 잉크 아래끝(em 비율)."""
+    if font not in _TT:
+        t = TTFont(FONTS[font])
+        _TT[font] = (t, t.getBestCmap(), t.getGlyphSet(), t["head"].unitsPerEm)
+    t, cmap, gs, upm = _TT[font]
+    lsb, ymin = None, 0
+    for ch in s:
+        if ch == " ":
+            continue
+        pen = BoundsPen(gs)
+        gs[cmap[ord(ch)]].draw(pen)
+        if pen.bounds:
+            if lsb is None:
+                lsb = pen.bounds[0] / upm
+            ymin = min(ymin, pen.bounds[1] / upm)
+    return lsb or 0, ymin
+
+
+def scan_text(page, s, ink_left_px, ink_bottom_px, size, font="HY", xscale=1.0, stroke=0.0):
+    """글자 잉크의 왼쪽·아래 끝이 스캔의 (ink_left_px, ink_bottom_px)에 오도록 쓴다.
+    xscale 은 한글 문서의 장평(가로 비율), stroke 는 굵게(외곽선, 글자 크기 비율)."""
+    lsb, ymin = ink_bounds(s, font)
+    x = sx(ink_left_px) - lsb * size * xscale
+    y = sy(ink_bottom_px + 0.5) + ymin * size
+    kw = dict(fontname=font, fontfile=FONTS[font], fontsize=size, color=BLACK)
+    if stroke:
+        kw.update(fill=BLACK, render_mode=2, border_width=stroke)
+    if xscale != 1.0:
+        kw["morph"] = (pymupdf.Point(x, y), pymupdf.Matrix(xscale, 1))
+    page.insert_text((x, y), s, **kw)
 
 
 def header(page, info):
-    # 학교 로고: 스캔에서 원 지름이 x 132~195px, y 178~242px
-    cx, cy = sx(163.5), sy(210)
+    # 학교 로고: 스캔에서 x 132~194px, y 179~241px
+    cx, cy = sx(161.5), sy(211.5)
     page.insert_image(pymupdf.Rect(cx - 18.3, cy - 17.45, cx + 18.3, cy + 17.45),
                       filename=os.path.join(ASSETS, "logo.jpeg"))
-    # 제목 (HY견고딕 19pt) — 각 낱말의 잉크 시작 위치는 스캔에서 잰 값
-    base = sy(236) + 0.11 * 19
+    # 제목: HY견고딕, 장평 약 95% — 낱말별 잉크 시작 위치는 스캔에서 잰 값
     s1, s2 = info["subject"][0], info["subject"][1:]
     for s, px in ((info["grade"], 219), ("학년", 262), (s1, 380), (s2, 460),
                   (info["exam"], 538), ("문제", 716)):
         if s:
-            ink_text(page, px, base, s, 19)
-    # 시행일 (오른쪽 끝 1101px)
-    text(page, sx(1101) + 0.3, sy(245) - 0.6, f"시행일 {info['date']} - {info['period']}",
-         size=6.96, anchor="r")
-    # 굵은 띠 (스캔 y 250~256px)
-    page.draw_rect(pymupdf.Rect(45.2, sy(249.5), 561.4, sy(256.5)), color=None, fill=BLACK)
-    # 과정·과목코드 줄 (HY견고딕 8pt) — 토큰별 잉크 시작 위치는 스캔에서 잰 값
-    base = sy(275) + 0.11 * 8
+            if s.isdigit():  # 숫자는 한글보다 작게 찍혀 있다
+                scan_text(page, s, px, 234, DIGIT_SIZE)
+            else:
+                scan_text(page, s, px, 239, TITLE_SIZE, xscale=TITLE_X)
+    # 시행일 (스캔 x 863~1101px, 아래끝 245px)
+    scan_text(page, f"시행일 {info['date']} - {info['period']}", 863, 245, DATE_SIZE,
+              font="Gulim", xscale=DATE_X, stroke=DATE_STROKE)
+    # 굵은 띠 (스캔 x 101~1123px, y 248~257px)
+    page.draw_rect(pymupdf.Rect(sx(101), sy(248), sx(1123.5), sy(257.5)), color=None,
+                   fill=BLACK)
+    # 과정·과목코드 줄: 굵은 굴림 — 토큰별 잉크 시작 위치는 스캔에서 잰 값
     for s, px in (("과", 187), ("정", 211), (":", 235), (f"( {info['course'].split()[0]}", 248),
                   ("개정", 306), ("교육과정", 346), (")", 417),
                   ("과목코드", 463), (":", 535), (f"( {info['code']}", 547), (")", 587),
                   ("이수단위", 632), (":", 704), ("(", 717), (info["credits"], 730), (")", 747),
                   ("문항수", 793), ("(", 849), ("선택형:", 863),
                   (f"{info['n_choice']} 서답형:", 923), (str(info["n_essay"]), 1010), (")", 1035)):
-        ink_text(page, px, base, s, 8)
+        scan_text(page, s, px, 273, META_SIZE, font="Gulim", xscale=META_X, stroke=META_STROKE)
+
+
+TITLE_SIZE, TITLE_X, DIGIT_SIZE = 21.0, 0.955, 19.1
+DATE_SIZE, DATE_X, DATE_STROKE = 6.96, 1.067, 0.04
+META_SIZE, META_X, META_STROKE = 8.0, 1.0, 0.045
 
 
 def frame(page):
