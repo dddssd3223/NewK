@@ -6,6 +6,7 @@
 좌표는 모두 원본 양식 PDF와 같은 pt 단위(왼쪽 위 기준)이다.
 """
 import os
+import shutil
 import re
 import zipfile
 
@@ -63,6 +64,9 @@ def font_files():
         if not os.path.exists(path):
             TTCollection(os.path.join(HERE, "gulim.ttc"))[idx].save(path)
         out[name] = path
+    won = os.path.join(FONT_DIR, "WONBatangR.ttf")
+    if not os.path.exists(won):
+        shutil.copy(os.path.join(HERE, "WONBatangR.ttf"), won)
     return out
 
 
@@ -78,6 +82,7 @@ def goorm_bold():
 
 FONTS = font_files()
 FONTS["Title"] = goorm_bold()  # 제목: 구름 산스 Bold
+FONTS["Won"] = os.path.join(FONT_DIR, "WONBatangR.ttf")  # 본문: WON 바탕
 METRICS = {k: pymupdf.Font(fontfile=v) for k, v in FONTS.items()}
 
 
@@ -270,13 +275,16 @@ def last_page_block(page, info, marks):
 
 
 # ── 문제 배치 ──────────────────────────────────────────────
-# 글꼴·크기는 원본 문학 시험지(본문 돋움 약 9.7pt, 줄 간격 약 12pt)를 따른다.
+# 본문 글꼴은 WON 바탕. 크기는 원본 문학 시험지 스캔의 글자 높이(줄당 약 15px)와
+# 줄 간격(약 24px = 12.2pt)에 맞춘 8.2pt.
 # 원본처럼 획이 진하도록 배치 후 문제 글자를 채우기+외곽선으로 그린다(BODY_STROKE).
-BODY_STROKE = 0.24
+BODY_STROKE = 0.16
 CSS = """
+@font-face { font-family: W; src: url(WONBatangR.ttf); }
 @font-face { font-family: D; src: url(Dotum.ttf); }
-* { font-family: D; }
-body { font-size: 9.7pt; line-height: 1.27; text-align: justify; }
+* { font-family: W; }
+.fb { font-family: D; }
+body { font-size: 8.2pt; line-height: 12.2pt; text-align: justify; }
 p { margin: 0; }
 .stem { padding-left: 1.45em; text-indent: -1.45em; margin-bottom: 3pt; }
 .c { padding-left: 1.25em; text-indent: -1.25em; }
@@ -317,15 +325,15 @@ td.top { border: 0.6pt solid black; padding: 1pt; }
 td.hd2 { border: 0.6pt solid black; width: 22%; padding: 1pt; }
 td.bd2 { border: 0.6pt solid black; border-top: none; padding: 3pt 2pt; }
 td.sp { width: 4%; }
-td.dg { font-size: 8pt; line-height: 1.15; }
-.q18t { font-size: 11.5pt; vertical-align: middle; padding-left: 8pt; }
+td.dg { font-size: 7pt; line-height: 8.5pt; }
+.q18t { font-size: 10pt; vertical-align: middle; padding-left: 8pt; }
 table.srch { width: 92%; margin: 2pt 0 6pt 0; }
-td.sbox { border: 1.6pt solid #555555; border-right: none; padding: 3pt 6pt; font-size: 12pt; }
+td.sbox { border: 1.6pt solid #555555; border-right: none; padding: 3pt 6pt; font-size: 10.5pt; }
 td.sarr { border: 1.6pt solid #555555; border-left: none; width: 20pt; font-size: 6pt;
           text-align: center; vertical-align: middle; }
 td.sgap { width: 4pt; }
 td.sbtn { width: 34pt; background-color: #bbbbbb; border: 1.2pt solid #555555; text-align: center;
-          vertical-align: middle; font-size: 9pt; }
+          vertical-align: middle; font-size: 8.2pt; }
 td.badge { width: 34pt; border: 0.8pt solid #777777; text-align: center; font-size: 6.5pt;
            line-height: 1.1; padding: 4pt 0; vertical-align: middle; }
 .fig { text-align: center; margin: 2pt 0 4pt 0; }
@@ -340,7 +348,37 @@ def question_html(n, stem, body, pts):
     # MuPDF 는 표 칸의 % 너비를 무시하므로 단 안쪽 너비(약 240pt) 기준 pt 로 바꾼다
     body = re.sub(r'<(td|th)([^>]*?)width:(\d+)%',
                   lambda m: f"<{m[1]}{m[2]}width:{int(m[3]) * 2.4:.0f}pt", body)
-    return f'<p class="stem">{n}. {stem} ({pts:.1f}점)</p>{body}'
+    html = f'<p class="stem">{n}. {stem} ({pts:.1f}점)</p>{body}'
+    return fallback(html)
+
+
+WON_CMAP = None
+
+
+def fallback(html):
+    """WON 바탕에 없는 글자(⇨, •, 결합 반달표 등)는 돋움으로 쓴다."""
+    global WON_CMAP
+    if WON_CMAP is None:
+        WON_CMAP = set(TTFont(os.path.join(FONT_DIR, "WONBatangR.ttf")).getBestCmap())
+    out, i, intag = [], 0, False
+    while i < len(html):
+        ch = html[i]
+        if ch == "<":
+            intag = True
+        if intag or ch == "&":
+            j = html.find(">" if intag else ";", i)
+            out.append(html[i:j + 1])
+            intag = False
+            i = j + 1
+            continue
+        nxt = html[i + 1] if i + 1 < len(html) else ""
+        if 0x300 <= ord(nxt) <= 0x36F:          # 결합 문자는 앞 글자와 함께
+            out.append(f'<span class="fb">{ch}{nxt}</span>')
+            i += 2
+            continue
+        out.append(ch if ord(ch) in WON_CMAP or ch.isspace() else f'<span class="fb">{ch}</span>')
+        i += 1
+    return "".join(out)
 
 
 def archive():
@@ -412,7 +450,7 @@ Q09_ARROWS = [((140, 315), (95, 290)), ((370, 310), (402, 290)), ((685, 310), (7
 def draw_q09(page, rect):
     k = rect.width / 957
     P = lambda x, y: pymupdf.Point(rect.x0 + x * k, rect.y0 + y * k)
-    size, font = 9.7, "Dotum"
+    size, font = 8.6, "Won"
     page.draw_rect(pymupdf.Rect(P(0, 0), P(957, 771)), color=BLACK, width=0.6)
     for (x0, y0, x1, y1), rows in Q09_BOXES:
         page.draw_rect(pymupdf.Rect(P(x0, y0), P(x1, y1)), color=BLACK, width=0.8)
