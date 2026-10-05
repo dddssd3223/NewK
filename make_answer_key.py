@@ -152,6 +152,8 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     lab_w = 42
     cw = (R - L - lab_w) / per_row
     for start in range(0, n, per_row):
+        if y + 62 > 800:                  # 정답표가 길면 다음 쪽으로
+            page, y = doc.new_page(width=595, height=842), 90
         nums = range(start, min(start + per_row, n))
         rows = [("번호", [str(i + 1) for i in nums], 18, SHADE),
                 ("배점", [f"{PTS[i]:.1f}" for i in nums], 20, None),
@@ -172,7 +174,10 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
         notes.append(f"※ {'·'.join(multi)}번은 복수 정답 문항으로, 정답을 모두 골라야 정답으로 인정합니다.")
     notes.append(f"※ 선택형 {n}문항, 총 {total:g}점 (문항별 배점은 위 표 참조)")
     if ne:
-        notes.append(f"※ 서술형 {ne}문항(각 {EP[0]:g}점, 총 {etotal:g}점)의 모범 답안과 채점 기준은 해설 뒤쪽 참조")
+        same = len(set(EP)) == 1
+        where = "해설의 해당 위치" if getattr(mod, "ESSAY_AFTER", None) is not None else "해설 뒤쪽"
+        notes.append(f"※ 서술형 {ne}문항({'각 ' + format(EP[0], 'g') + '점, ' if same else ''}총 {etotal:g}점)의 "
+                     f"모범 답안과 채점 기준은 {where} 참조")
     if errata:
         notes.append("※ 문제지 정정 및 정답 정정 내역은 2쪽 정오표 참조")
     if getattr(mod, "EXPL", None):
@@ -184,7 +189,8 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
         errata_page(doc)
     if getattr(mod, "EXPL", None):
         explanation_pages(doc, title, ANS, PTS, mod.EXPL,
-                          list(zip(EP, mod.ESSAY_ANS, mod.ESSAY_RUBRIC)) if ne else ())
+                          list(zip(EP, mod.ESSAY_ANS, mod.ESSAY_RUBRIC)) if ne else (),
+                          getattr(mod, "ESSAY_AFTER", None))
 
     doc.set_metadata({"title": f"{title} 정답지"})
     doc.subset_fonts()
@@ -192,8 +198,9 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     print("saved", out)
 
 
-def explanation_pages(doc, title, ANS, PTS, EXPL, essays=()):
-    """문항별 정답·해설. 2단 대신 한 단으로, 페이지가 차면 다음 쪽으로 넘긴다."""
+def explanation_pages(doc, title, ANS, PTS, EXPL, essays=(), essay_after=None):
+    """문항별 정답·해설. 한 단으로, 페이지가 차면 다음 쪽으로 넘긴다.
+    essay_after 가 있으면 서술형 해설을 문제지와 같은 자리(선택형 k번 뒤)에 끼워 넣는다."""
     L, R, top, bottom = 49.0, 541.0, 140.0, 790.0
     size, lead = 8.8, 12.4
 
@@ -205,16 +212,17 @@ def explanation_pages(doc, title, ANS, PTS, EXPL, essays=()):
         page.draw_line((112, 103), (114 + tw + 4, 103), color=BLACK, width=0.8, dashes="[1 1.5] 0")
         return page
 
-    page, y = new_page(), top
-    for i, (a, pt, ex) in enumerate(zip(ANS, PTS, EXPL), 1):
-        body = []
-        for part in ex.split(" [함정] "):
-            body.append(part)
+    state = {"page": new_page(), "y": top}
+
+    def choice(i):
+        a, pt, ex = ANS[i - 1], PTS[i - 1], EXPL[i - 1]
+        body = ex.split(" [함정] ")
         lines = wrap(body[0], size, R - L - 70)
         trap = wrap("[함정] " + body[1], size, R - L - 70) if len(body) > 1 else []
         h = lead * (len(lines) + len(trap)) + 10
-        if y + h > bottom:
-            page, y = new_page(), top
+        if state["y"] + h > bottom:
+            state["page"], state["y"] = new_page(), top
+        page, y = state["page"], state["y"]
         cell(page, pymupdf.Rect(L, y - 2, L + 62, y + 16), [f"{i}번  {a}"], 9.5, SHADE)
         put(page, L + 31, y + 30, f"({pt:.1f}점)", 7.5)
         ty = y + 10
@@ -227,14 +235,16 @@ def explanation_pages(doc, title, ANS, PTS, EXPL, essays=()):
             ty += lead
         y = max(ty, y + 36) + 8
         page.draw_line((L, y - 4), (R, y - 4), color=(0.75, 0.75, 0.75), width=0.4)
+        state["y"] = y
 
-    # 서술형: 모범 답안 + 채점 기준
-    for i, (pt, ans, rubric) in enumerate(essays, 1):
+    def essay(i):
+        pt, ans, rubric = essays[i - 1]
         blocks = [(wrap("[모범 답안] " + a, size, R - L - 70), BLACK) for a in ans.split("\n")]
         blocks += [(wrap(r, size, R - L - 70), (0.15, 0.25, 0.55)) for r in rubric]
         h = lead * sum(len(b) for b, _ in blocks) + 14
-        if y + h > bottom:
-            page, y = new_page(), top
+        if state["y"] + h > bottom:
+            state["page"], state["y"] = new_page(), top
+        page, y = state["page"], state["y"]
         cell(page, pymupdf.Rect(L, y - 2, L + 62, y + 16), [f"서술형 {i}"], 9.5, SHADE)
         put(page, L + 31, y + 30, f"({pt:g}점)", 7.5)
         ty = y + 10
@@ -246,6 +256,22 @@ def explanation_pages(doc, title, ANS, PTS, EXPL, essays=()):
             ty += 2
         y = max(ty, y + 36) + 8
         page.draw_line((L, y - 4), (R, y - 4), color=(0.75, 0.75, 0.75), width=0.4)
+        state["y"] = y
+
+    if essay_after is None:
+        for i in range(1, len(ANS) + 1):
+            choice(i)
+        for j in range(1, len(essays) + 1):
+            essay(j)
+        return
+    for j, k in enumerate(essay_after, 1):
+        if k == 0:
+            essay(j)
+    for i in range(1, len(ANS) + 1):
+        choice(i)
+        for j, k in enumerate(essay_after, 1):
+            if k == i:
+                essay(j)
 
 
 if __name__ == "__main__":
@@ -253,7 +279,7 @@ if __name__ == "__main__":
     # python3 make_answer_key.py mock1_questions 실전1회_정답지.pdf "실전 1회"
     if len(sys.argv) > 1:
         n = len(importlib.import_module(sys.argv[1]).Q)
-        per_row = 12 if n <= 24 else -(-n // 2)  # 25문항 이상은 두 줄로
+        per_row = 12 if n <= 24 else -(-n // 2) if n <= 30 else 15  # 25~30문항은 두 줄로
         main(sys.argv[2], sys.argv[1], sys.argv[3] if len(sys.argv) > 3 else "", errata=False,
              per_row=per_row)
     else:

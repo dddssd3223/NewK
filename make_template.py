@@ -256,7 +256,10 @@ def first_page_block(page, info):
         else:
             text(page, 45.7, y, s, size=8.28)
 
-    text(page, 42.5, 298.2, f"<선택형 문제 – {info['choice_score']}점>", size=11.52)
+    head = f"<선택형 문제 – {info['choice_score']}점>"
+    if info.get("mixed"):
+        head = f"<선택형 {info['choice_score']}점 · 서답형 {info['essay_score']}점>"
+    text(page, 42.5, 298.2, head, size=11.52)
     text(page, 42.5, 311.0, f"선택형 문제(1~{info['n_choice']})번의 정답은 반드시", size=9.0)
     omr = "OMR카드에 컴퓨터용 사인펜으로 명확히 표기"
     text(page, 42.5, 322.8, omr + "하시오.", size=9.0)
@@ -348,6 +351,16 @@ td.sbtn { width: 34pt; background-color: #bbbbbb; border: 1.2pt solid #555555; t
 td.badge { width: 34pt; border: 0.8pt solid #777777; text-align: center; font-size: 6.5pt;
            line-height: 1.1; padding: 4pt 0; vertical-align: middle; }
 .fig { text-align: center; margin: 2pt 0 4pt 0; }
+table.chat { width: 88%; margin: 3pt auto; border: 0.8pt solid #555555; background-color: #f4f4f4; }
+table.chat td { padding: 2pt 4pt; }
+td.ct { text-align: center; border-bottom: 0.6pt solid #888888; font-size: 7.5pt; }
+td.cl { padding-right: 30pt; background-color: #ffffff; border: 0.5pt solid #999999; }
+td.cl, td.cr { line-height: 11pt; }
+td.cr { text-align: right; background-color: #fff6c8; border: 0.5pt solid #999999; }
+td.cs { width: 25%; }
+.cw { font-size: 7pt; color: #555555; }
+table.sgn { margin: 3pt 0; }
+table.sgn td.sg { border: 1.2pt solid black; padding: 4pt; text-align: center; vertical-align: middle; }
 table.al { margin-top: 3pt; }
 table.al td { border-bottom: 0.5pt solid #888888; padding: 0; line-height: 16pt; }
 .cond { border: 0.6pt solid black; padding: 2pt 5pt 3pt 5pt; margin: 3pt 0 2pt 0; }
@@ -418,14 +431,21 @@ def measure(html, arc):
 ESSAY_HEAD_H = 40.0                          # 서답형 머리글 높이(pt)
 
 
-def layout(questions, pts, arc, essays=(), essay_pts=()):
+def layout(questions, pts, arc, essays=(), essay_pts=(), essay_after=None):
     """문제를 쪽·단에 순서대로 채운다. 반환: [(쪽 번호, 단 번호, y, 높이, html)]
-    서술형이 있으면 첫 서술형 앞에 머리글 자리(html=None)를 둔다(머리글과 첫 문제는 같은 단에)."""
-    items = [(question_html(n, stem, body, pts[n - 1]), 0.0)
-             for n, (stem, body) in enumerate(questions, 1)]
-    items += [(question_html(n, stem, body, essay_pts[n - 1], essay=True),
-               ESSAY_HEAD_H if n == 1 else 0.0)
-              for n, (stem, body) in enumerate(essays, 1)]
+    essay_after 가 없으면 서술형을 맨 뒤에 모으고 첫 서술형 앞에 머리글 자리(html=None)를 둔다.
+    essay_after[i] = k 이면 서술형 i+1 을 선택형 k번 바로 뒤에 둔다(0 이면 맨 앞)."""
+    choice = [question_html(n, stem, body, pts[n - 1]) for n, (stem, body) in enumerate(questions, 1)]
+    essay = [question_html(n, stem, body, essay_pts[n - 1], essay=True)
+             for n, (stem, body) in enumerate(essays, 1)]
+    if essay_after is None:
+        items = [(h, 0.0) for h in choice] + [(h, ESSAY_HEAD_H if i == 0 else 0.0)
+                                              for i, h in enumerate(essay)]
+    else:
+        items = [(essay[i], 0.0) for i, k in enumerate(essay_after) if k == 0]
+        for n, h in enumerate(choice, 1):
+            items.append((h, 0.0))
+            items += [(essay[i], 0.0) for i, k in enumerate(essay_after) if k == n]
     slots, page, col, y = [], 1, 0, TOP1
     for html, head in items:
         h = measure(html, arc) + head
@@ -521,9 +541,10 @@ def main(out="시험지_양식.pdf", qmod="questions"):
     PTS, Q = mod.PTS, mod.Q
     ES, EP = getattr(mod, "ESSAY", []), getattr(mod, "ESSAY_PTS", [])
     info = dict(INFO, n_choice=len(Q), choice_score=f"{sum(PTS):g}",
-                n_essay=len(ES), essay_score=f"{sum(EP):g}")
+                n_essay=len(ES), essay_score=f"{sum(EP):g}",
+                mixed=getattr(mod, "ESSAY_AFTER", None) is not None)
     arc = archive()
-    slots, n_pages = layout(Q, PTS, arc, ES, EP)
+    slots, n_pages = layout(Q, PTS, arc, ES, EP, getattr(mod, "ESSAY_AFTER", None))
     info["pages"] = n_pages
     marks = pymupdf.open(os.path.join(ASSETS, "marks.pdf"))  # 마지막 쪽 이모티콘
     doc = pymupdf.open()
