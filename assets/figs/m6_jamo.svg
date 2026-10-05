@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 340" width="480" height="340">
+<rect x="1" y="1" width="478" height="338" fill="none" stroke="#000" stroke-width="1"/>
+<rect x="5" y="8" width="150" height="70" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="14" y="37" font-size="15">① ㅆ : 마찰음이자</text>
+<text x="14" y="62" font-size="15">된소리이다.</text>
+<rect x="165" y="8" width="150" height="70" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="174" y="37" font-size="15">② ㅈ : 파찰음이자</text>
+<text x="174" y="62" font-size="15">잇몸소리이다.</text>
+<rect x="325" y="8" width="150" height="70" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="334" y="37" font-size="15">③ ㅇ : 비음이자 여린</text>
+<text x="334" y="62" font-size="15">입천장소리이다.</text>
+<rect x="40" y="262" width="160" height="70" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="49" y="291" font-size="15">④ ㅎ : 마찰음이자</text>
+<text x="49" y="316" font-size="15">목청소리이다.</text>
+<rect x="290" y="262" width="160" height="70" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="299" y="291" font-size="15">⑤ ㄷ : 파열음이자</text>
+<text x="299" y="316" font-size="15">잇몸소리이다.</text>
+<text x="400" y="160" font-size="13" fill="#555" text-anchor="middle">← ‘썰매장’</text>
+<text x="425" y="226" font-size="13" fill="#555" text-anchor="middle">← ‘해돋이’</text>
+<text x="50" y="160" font-size="20" text-anchor="middle">ㅆ</text>
+<circle cx="50" cy="153" r="15" fill="none" stroke="#000" stroke-width="0.9"/>
+<text x="76" y="160" font-size="20" text-anchor="middle">ㅓ</text>
+<text x="102" y="160" font-size="20" text-anchor="middle">ㄹ</text>
+<text x="168" y="160" font-size="20" text-anchor="middle">ㅁ</text>
+<text x="194" y="160" font-size="20" text-anchor="middle">ㅐ</text>
+<text x="240" y="160" font-size="20" text-anchor="middle">ㅈ</text>
+<circle cx="240" cy="153" r="15" fill="none" stroke="#000" stroke-width="0.9"/>
+<text x="266" y="160" font-size="20" text-anchor="middle">ㅏ</text>
+<text x="292" y="160" font-size="20" text-anchor="middle">ㅇ</text>
+<circle cx="292" cy="153" r="15" fill="none" stroke="#000" stroke-width="0.9"/>
+<text x="120" y="226" font-size="20" text-anchor="middle">ㅎ</text>
+<circle cx="120" cy="219" r="15" fill="none" stroke="#000" stroke-width="0.9"/>
+<text x="146" y="226" font-size="20" text-anchor="middle">ㅐ</text>
+<text x="212" y="226" font-size="20" text-anchor="middle">ㄷ</text>
+<circle cx="212" cy="219" r="15" fill="none" stroke="#000" stroke-width="0.9"/>
+<text x="238" y="226" font-size="20" text-anchor="middle">ㅗ</text>
+<text x="264" y="226" font-size="20" text-anchor="middle">ㄷ</text>
+<text x="330" y="226" font-size="20" text-anchor="middle">ㅇ</text>
+<text x="356" y="226" font-size="20" text-anchor="middle">ㅣ</text>
+<line x1="54" y1="136" x2="72" y2="82" stroke="#000" stroke-width="0.9"/>
+<path d="M72.0,82.0 L72.9,91.8 L65.4,89.3 Z" fill="#000"/>
+<line x1="240" y1="136" x2="240" y2="82" stroke="#000" stroke-width="0.9"/>
+<path d="M240.0,82.0 L244.0,91.0 L236.0,91.0 Z" fill="#000"/>
+<line x1="303" y1="142" x2="380" y2="82" stroke="#000" stroke-width="0.9"/>
+<path d="M380.0,82.0 L375.4,90.7 L370.4,84.4 Z" fill="#000"/>
+<line x1="120" y1="236" x2="120" y2="258" stroke="#000" stroke-width="0.9"/>
+<path d="M120.0,258.0 L116.0,249.0 L124.0,249.0 Z" fill="#000"/>
+<line x1="224" y1="234" x2="330" y2="258" stroke="#000" stroke-width="0.9"/>
+<path d="M330.0,258.0 L320.3,259.9 L322.1,252.1 Z" fill="#000"/>
+</svg>

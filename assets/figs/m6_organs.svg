@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 380" width="440" height="380">
+  <!-- 바깥 윤곽: 왼쪽을 바라보는 사람의 옆얼굴과 목 -->
+  <path d="M300,12 C240,4 168,10 132,40 C110,58 104,80 106,100
+           C107,108 104,114 100,120 C92,132 80,146 66,160 C62,165 64,170 70,172
+           C78,174 86,174 92,176 C94,180 92,184 88,187
+           C82,190 78,194 80,199 C82,202 86,203 88,204
+           C84,206 80,210 81,215 C82,220 86,223 90,226
+           C88,236 88,246 92,256 C98,268 112,274 132,276
+           C150,278 166,282 172,292 C178,312 180,340 182,372"
+        fill="none" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M300,12 C350,22 386,60 392,110 C398,160 384,196 360,216 C346,228 338,250 336,280 C334,316 334,346 334,372"
+        fill="none" stroke="#000" stroke-width="1.5"/>
+  <!-- 눈썹·눈(옆모습 암시) -->
+  <path d="M120,74 Q134,68 148,72" fill="none" stroke="#000" stroke-width="1.1"/>
+  <path d="M126,90 Q136,84 146,90 Q136,94 126,90 Z" fill="none" stroke="#000" stroke-width="1"/>
+  <!-- 귀 -->
+  <path d="M300,126 C318,114 338,126 336,152 C334,176 320,190 306,186" fill="none" stroke="#000" stroke-width="1.1"/><path d="M310,140 C320,136 326,146 320,160" fill="none" stroke="#000" stroke-width="0.9"/>
+  <!-- 코안(비강) -->
+  <path d="M94,170 C120,150 170,140 232,146 C252,148 262,156 266,168" fill="#eef3fa" stroke="#555" stroke-width="1"/>
+  <path d="M100,175 C140,168 200,164 252,170" fill="none" stroke="#888" stroke-width="0.8" stroke-dasharray="3 2"/>
+  <!-- 입천장: 윗잇몸 → 센입천장 → 여린입천장(목젖) -->
+  <path d="M96,190 C104,182 116,178 130,177 C156,175 186,176 210,180" fill="none" stroke="#000" stroke-width="2.4"/>
+  <path d="M210,180 C228,183 242,190 250,202 C254,210 252,218 246,220 C240,220 238,212 238,206"
+        fill="none" stroke="#000" stroke-width="1.5"/>
+  <!-- 윗니·아랫니 -->
+  <path d="M88,188 L96,188 L95,199 L89,199 Z" fill="#fff" stroke="#000" stroke-width="1.1"/>
+  <path d="M90,208 L96,208 L97,219 L91,219 Z" fill="#fff" stroke="#000" stroke-width="1.1"/>
+  <!-- 혀 -->
+  <path d="M98,206 C104,198 116,194 132,193 C162,191 196,192 218,202 C236,210 246,226 248,246
+           C249,258 246,268 240,276 L234,276 C226,262 210,252 190,246 C160,238 128,232 104,226 C96,222 94,212 98,206 Z"
+        fill="#dbe6f4" stroke="#000" stroke-width="1.3"/>
+  <!-- 아래턱 안쪽 -->
+  <path d="M98,228 C112,240 140,252 176,262 C200,268 222,276 236,286" fill="none" stroke="#777" stroke-width="0.9"/>
+  <!-- 목구멍(인두) 뒷벽 -->
+  <path d="M266,168 C272,200 276,240 274,280 C272,310 272,340 274,372" fill="none" stroke="#000" stroke-width="1.3"/>
+  <!-- 후두덮개 -->
+  <path d="M244,272 C250,262 258,262 260,272" fill="none" stroke="#000" stroke-width="1.1"/>
+  <!-- 기관 앞벽과 식도 사이 -->
+  <path d="M236,286 C234,310 234,340 236,372" fill="none" stroke="#000" stroke-width="1.3"/>
+  <path d="M256,300 C256,330 256,350 256,372" fill="none" stroke="#999" stroke-width="0.8"/>
+  <!-- 목청(성대) -->
+  <path d="M237,318 L250,314" stroke="#000" stroke-width="2.2"/>
+  <path d="M262,318 L250,314" stroke="#000" stroke-width="2.2"/>
+
+  <!-- 표시 점 -->
+  <g fill="#3a66b0" stroke="#fff" stroke-width="1">
+    <circle cx="86" cy="203" r="5"/>
+    <circle cx="104" cy="184" r="5"/>
+    <circle cx="160" cy="176" r="5"/>
+    <circle cx="232" cy="188" r="5"/>
+    <circle cx="246" cy="316" r="5"/>
+  </g>
+  <!-- 지시선과 기호 -->
+  <g fill="none" stroke="#000" stroke-width="0.9">
+    <path d="M80,204 L34,232"/>
+    <path d="M102,180 L70,112"/>
+    <path d="M160,171 L172,116"/>
+    <path d="M236,184 L268,120"/>
+    <path d="M252,316 L300,330"/>
+  </g>
+  <g font-size="26" text-anchor="middle">
+    <text x="24" y="250">㉠</text>
+    <text x="64" y="106">㉡</text>
+    <text x="176" y="110">㉢</text>
+    <text x="274" y="114">㉣</text>
+    <text x="314" y="342">㉤</text>
+  </g>
+  <g font-size="14" fill="#555" text-anchor="middle">
+    <text x="178" y="162">코안</text>
+    <text x="168" y="222">혀</text>
+  </g>
+</svg>
