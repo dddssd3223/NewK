@@ -129,12 +129,14 @@ def left_panel(page, label, x0, x1):
     put(page, x0 + 6, r.y1 - 10, "※ 서답형은 별도의 서답형 답안지에 작성하시오.", 7.3, color=BLACK)
 
 
-def answer_panel(page, n, x0, x1, per_col=15):
+def answer_panel(page, n, x0, x1, per_col=None):
     """선택형 답란: 번호 칸 + ①~⑤ 타원. 다섯 문항마다 굵은 구분선."""
     y0 = M
     top = y0 + 22
     rect(page, pymupdf.Rect(x0, y0, x1, top), fill=TINT, w=0.9)
     put(page, (x0 + x1) / 2, y0 + 15, f"선  택  형    답  란   (1 ~ {n}번)", 10, "c")
+    if per_col is None:                     # 많으면 한 열에 더 넣는다(최대 6열)
+        per_col = 15 if n <= 45 else max(20, -(-n // 6))
     ncol = max(3, -(-n // per_col))
     colw = (x1 - x0) / ncol
     row = (H - M - 14 - top - 22) / per_col
@@ -164,7 +166,8 @@ def answer_panel(page, n, x0, x1, per_col=15):
             put(page, cx0 + nw / 2, yy + row / 2 + 3.3, str(q), 9, "c", BLACK)
             span = colw - nw
             for b in range(5):
-                bubble(page, cx0 + nw + span * (b + 0.5) / 5, yy + row / 2, str(b + 1), 10.5, 14)
+                bw = min(10.5, span / 5 * 0.72)
+                bubble(page, cx0 + nw + span * (b + 0.5) / 5, yy + row / 2, str(b + 1), bw, min(14, row * 0.72))
     # 아래 타이밍 마크(판독기 기준선)
     for k in range(per_col):
         yy = top + 22 + row * k + row / 2
