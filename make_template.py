@@ -296,6 +296,7 @@ BODY_STROKE = 0
 CSS = """
 @font-face { font-family: W; src: url(HCRBatangR.ttf); }
 @font-face { font-family: D; src: url(Dotum.ttf); }
+@font-face { font-family: B; src: url(goorm-sans-bold.ttf); }
 * { font-family: W; }
 .fb { font-family: D; }
 body { font-size: 8.05pt; line-height: 12.2pt; text-align: justify; }
@@ -364,6 +365,7 @@ table.sgn td.sg { border: 1.2pt solid black; padding: 4pt; text-align: center; v
 table.sec { margin: 0 0 5pt 0; }
 table.sec td { font-family: D; font-size: 8.6pt; background-color: #e6e6e6; border-top: 1.2pt solid black;
                border-bottom: 0.6pt solid black; padding: 2pt 4pt; }
+.grp { font-family: B; font-size: 8.6pt; margin-bottom: 3pt; }
 table.al { margin-top: 3pt; }
 table.al td { border-bottom: 0.5pt solid #888888; padding: 0; line-height: 16pt; }
 .cond { border: 0.6pt solid black; padding: 2pt 5pt 3pt 5pt; margin: 3pt 0 2pt 0; }
@@ -438,7 +440,7 @@ def section_html(title):
     return f'<table class="sec"><tr><td>{title}</td></tr></table>'
 
 
-def layout(questions, pts, arc, essays=(), essay_pts=(), essay_after=None, sections=()):
+def layout(questions, pts, arc, essays=(), essay_pts=(), essay_after=None, sections=(), groups=()):
     """문제를 쪽·단에 순서대로 채운다. 반환: [(쪽 번호, 단 번호, y, 높이, html)]
     essay_after 가 없으면 서술형을 맨 뒤에 모으고 첫 서술형 앞에 머리글 자리(html=None)를 둔다.
     essay_after[i] = k 이면 서술형 i+1 을 선택형 k번 바로 뒤에 둔다(0 이면 맨 앞)."""
@@ -450,9 +452,17 @@ def layout(questions, pts, arc, essays=(), essay_pts=(), essay_after=None, secti
                                               for i, h in enumerate(essay)]
     else:
         items = [(essay[i], 0.0) for i, k in enumerate(essay_after) if k == 0]
+        seq = [("E", i + 1) for i, k in enumerate(essay_after) if k == 0]
         for n, h in enumerate(choice, 1):
             items.append((h, 0.0))
+            seq.append(("Q", n))
             items += [(essay[i], 0.0) for i, k in enumerate(essay_after) if k == n]
+            seq += [("E", i + 1) for i, k in enumerate(essay_after) if k == n]
+    for start, end in groups:                # 공유 지문 묶음: [1~서답형 1] 처럼 굵게
+        name = lambda i: (f"서답형 {seq[i][1]}" if seq[i][0] == "E" else str(seq[i][1]))
+        label = f'<p class="grp">[{name(start)}~{name(end)}]</p>'
+        html, head = items[start]
+        items[start] = (fallback(label) + html, head)
     for idx, title in sections:              # 대제목은 그다음 문항과 한 덩어리로
         if idx < len(items):
             html, head = items[idx]
@@ -556,7 +566,7 @@ def main(out="시험지_양식.pdf", qmod="questions"):
                 mixed=getattr(mod, "ESSAY_AFTER", None) is not None)
     arc = archive()
     slots, n_pages = layout(Q, PTS, arc, ES, EP, getattr(mod, "ESSAY_AFTER", None),
-                            getattr(mod, "SECTIONS", ()))
+                            getattr(mod, "SECTIONS", ()), getattr(mod, "GROUPS", ()))
     info["pages"] = n_pages
     marks = pymupdf.open(os.path.join(ASSETS, "marks.pdf"))  # 마지막 쪽 이모티콘
     doc = pymupdf.open()
