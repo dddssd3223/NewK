@@ -119,6 +119,8 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     ANS, PTS, Q = mod.ANS, mod.PTS, mod.Q
     n = len(Q)
     total = sum(PTS)
+    EP = getattr(mod, "ESSAY_PTS", [])
+    ne, etotal = len(EP), sum(EP)
     doc = pymupdf.open()
     page = doc.new_page(width=595, height=842)
     L, R = 49.0, 541.0
@@ -135,7 +137,7 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     heads = [["학년"], ["과정"], ["과목", "코드"], ["과목명"], ["이수", "단위"], ["문항수"],
              ["선택형", "점수"], ["서술형", "점수"]]
     vals = [[INFO["grade"]], INFO["course"].split()[:2], [INFO["code"]], [INFO["subject"]],
-            [INFO["credits"]], [str(n)], [f"{total:g}"], [f"{INFO['essay_score']}"]]
+            [INFO["credits"]], [str(n + ne)], [f"{total:g}"], [f"{etotal:g}"]]
     widths = [36, 60, 44, 106, 44, 48, 52, 52]
     scale = (R - L) / sum(widths)
     x, y0 = L, 150
@@ -169,6 +171,8 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     if multi:
         notes.append(f"※ {'·'.join(multi)}번은 복수 정답 문항으로, 정답을 모두 골라야 정답으로 인정합니다.")
     notes.append(f"※ 선택형 {n}문항, 총 {total:g}점 (문항별 배점은 위 표 참조)")
+    if ne:
+        notes.append(f"※ 서술형 {ne}문항(각 {EP[0]:g}점, 총 {etotal:g}점)의 모범 답안과 채점 기준은 해설 뒤쪽 참조")
     if errata:
         notes.append("※ 문제지 정정 및 정답 정정 내역은 2쪽 정오표 참조")
     if getattr(mod, "EXPL", None):
@@ -179,7 +183,8 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     if errata:
         errata_page(doc)
     if getattr(mod, "EXPL", None):
-        explanation_pages(doc, title, ANS, PTS, mod.EXPL)
+        explanation_pages(doc, title, ANS, PTS, mod.EXPL,
+                          list(zip(EP, mod.ESSAY_ANS, mod.ESSAY_RUBRIC)) if ne else ())
 
     doc.set_metadata({"title": f"{title} 정답지"})
     doc.subset_fonts()
@@ -187,7 +192,7 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     print("saved", out)
 
 
-def explanation_pages(doc, title, ANS, PTS, EXPL):
+def explanation_pages(doc, title, ANS, PTS, EXPL, essays=()):
     """문항별 정답·해설. 2단 대신 한 단으로, 페이지가 차면 다음 쪽으로 넘긴다."""
     L, R, top, bottom = 49.0, 541.0, 140.0, 790.0
     size, lead = 8.8, 12.4
@@ -223,11 +228,33 @@ def explanation_pages(doc, title, ANS, PTS, EXPL):
         y = max(ty, y + 36) + 8
         page.draw_line((L, y - 4), (R, y - 4), color=(0.75, 0.75, 0.75), width=0.4)
 
+    # 서술형: 모범 답안 + 채점 기준
+    for i, (pt, ans, rubric) in enumerate(essays, 1):
+        blocks = [(wrap("[모범 답안] " + a, size, R - L - 70), BLACK) for a in ans.split("\n")]
+        blocks += [(wrap(r, size, R - L - 70), (0.15, 0.25, 0.55)) for r in rubric]
+        h = lead * sum(len(b) for b, _ in blocks) + 14
+        if y + h > bottom:
+            page, y = new_page(), top
+        cell(page, pymupdf.Rect(L, y - 2, L + 62, y + 16), [f"서술형 {i}"], 9.5, SHADE)
+        put(page, L + 31, y + 30, f"({pt:g}점)", 7.5)
+        ty = y + 10
+        for lines, color in blocks:
+            for ln in lines:
+                page.insert_text((L + 70, ty), ln, fontname=FONT, fontfile=FONTS[FONT],
+                                 fontsize=size, color=color)
+                ty += lead
+            ty += 2
+        y = max(ty, y + 36) + 8
+        page.draw_line((L, y - 4), (R, y - 4), color=(0.75, 0.75, 0.75), width=0.4)
+
 
 if __name__ == "__main__":
     # python3 make_answer_key.py                       -> 학교 프린트 정답지(정오표 포함)
     # python3 make_answer_key.py mock1_questions 실전1회_정답지.pdf "실전 1회"
     if len(sys.argv) > 1:
-        main(sys.argv[2], sys.argv[1], sys.argv[3] if len(sys.argv) > 3 else "", errata=False, per_row=12)
+        n = len(importlib.import_module(sys.argv[1]).Q)
+        per_row = 12 if n <= 24 else -(-n // 2)  # 25문항 이상은 두 줄로
+        main(sys.argv[2], sys.argv[1], sys.argv[3] if len(sys.argv) > 3 else "", errata=False,
+             per_row=per_row)
     else:
         main()

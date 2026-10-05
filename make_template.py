@@ -276,6 +276,15 @@ def last_page_block(page, info, marks):
              space=NARROW)
 
 
+def essay_head(page, info, cols, y):
+    """서답형 머리글: 1쪽의 선택형 머리글과 같은 모양."""
+    x0, x1 = cols
+    text(page, x0, y + 11, f"<서답형 문제 – {info['essay_score']}점>", size=11.52)
+    text(page, x0, y + 24, "서답형 문제의 답은 반드시 답안지의 해당 칸에", size=9.0)
+    text(page, x0, y + 35.5, "검은색 볼펜으로 작성하시오.", size=9.0)
+    line(page, (x0, y + 39), (x1, y + 39), 1.44)
+
+
 # ── 문제 배치 ──────────────────────────────────────────────
 # 본문 글꼴은 원본 문학 시험지와 같은 함초롱바탕. 크기 8.05pt 는 스캔의 글자 높이(줄당
 # 약 15px)와 줄바꿈 위치가 같아지는 값이고, 줄 간격 12.2pt 는 스캔의 24px 에 맞춘 것이다.
@@ -339,6 +348,9 @@ td.sbtn { width: 34pt; background-color: #bbbbbb; border: 1.2pt solid #555555; t
 td.badge { width: 34pt; border: 0.8pt solid #777777; text-align: center; font-size: 6.5pt;
            line-height: 1.1; padding: 4pt 0; vertical-align: middle; }
 .fig { text-align: center; margin: 2pt 0 4pt 0; }
+table.al { margin-top: 3pt; }
+table.al td { border-bottom: 0.5pt solid #888888; padding: 0; line-height: 16pt; }
+.cond { border: 0.6pt solid black; padding: 2pt 5pt 3pt 5pt; margin: 3pt 0 2pt 0; }
 """
 COLS = ((42.5, 292.0), (302.5, 553.0))      # 왼쪽·오른쪽 단의 x 범위
 TOP, TOP1, BOTTOM = 153.0, 338.0, 768.0      # 단의 위·아래 (1쪽 왼쪽 단은 OMR 안내 아래부터)
@@ -346,11 +358,14 @@ Q_GAP = 16.0                                 # 문제 사이 간격(pt)
 CLOSING_TOP = 610.0                          # 마지막 쪽 '수고하셨습니다' 자리
 
 
-def question_html(n, stem, body, pts):
+def question_html(n, stem, body, pts, essay=False):
     # MuPDF 는 표 칸의 % 너비를 무시하므로 단 안쪽 너비(약 240pt) 기준 pt 로 바꾼다
     body = re.sub(r'<(td|th)([^>]*?)width:(\d+)%',
                   lambda m: f"<{m[1]}{m[2]}width:{int(m[3]) * 2.4:.0f}pt", body)
-    html = f'<p class="stem">{n}. {stem} ({pts:.1f}점)</p>{body}'
+    if essay:  # 서술형: [서술형 n] 발문 (6점)
+        html = f'<p class="stem es">[서술형 {n}] {stem} ({pts:g}점)</p>{body}'
+    else:
+        html = f'<p class="stem">{n}. {stem} ({pts:.1f}점)</p>{body}'
     html = html.replace("&#8199;", "&#160;&#160;")   # 숫자 폭 공백은 본문 글꼴에 없어 공백 두 칸으로
     return fallback(html)
 
@@ -400,19 +415,29 @@ def measure(html, arc):
     return 2990 - spare
 
 
-def layout(questions, pts, arc):
-    """문제를 쪽·단에 순서대로 채운다. 반환: [(쪽 번호, 단 번호, y, 높이, html)]"""
+ESSAY_HEAD_H = 40.0                          # 서답형 머리글 높이(pt)
+
+
+def layout(questions, pts, arc, essays=(), essay_pts=()):
+    """문제를 쪽·단에 순서대로 채운다. 반환: [(쪽 번호, 단 번호, y, 높이, html)]
+    서술형이 있으면 첫 서술형 앞에 머리글 자리(html=None)를 둔다(머리글과 첫 문제는 같은 단에)."""
+    items = [(question_html(n, stem, body, pts[n - 1]), 0.0)
+             for n, (stem, body) in enumerate(questions, 1)]
+    items += [(question_html(n, stem, body, essay_pts[n - 1], essay=True),
+               ESSAY_HEAD_H if n == 1 else 0.0)
+              for n, (stem, body) in enumerate(essays, 1)]
     slots, page, col, y = [], 1, 0, TOP1
-    for n, (stem, body) in enumerate(questions, 1):
-        html = question_html(n, stem, body, pts[n - 1])
-        h = measure(html, arc)
+    for html, head in items:
+        h = measure(html, arc) + head
         top = TOP1 if (page, col) == (1, 0) else TOP
         if y + h > BOTTOM and y > top:      # 이 단에 안 들어가면 다음 단으로
             col += 1
             if col == 2:
                 page, col = page + 1, 0
             y = TOP
-        slots.append((page, col, y, h, html))
+        if head:
+            slots.append((page, col, y, head, None))
+        slots.append((page, col, y + head, h - head, html))
         y += h + Q_GAP
     # 마지막 쪽 오른쪽 단 아래에 마무리 문구가 들어갈 자리가 없으면 한 쪽 더
     last_page = page
@@ -494,9 +519,11 @@ FIGURES = {"q09": draw_q09}
 def main(out="시험지_양식.pdf", qmod="questions"):
     mod = importlib.import_module(qmod)
     PTS, Q = mod.PTS, mod.Q
-    info = dict(INFO, n_choice=len(Q), choice_score=f"{sum(PTS):g}")
+    ES, EP = getattr(mod, "ESSAY", []), getattr(mod, "ESSAY_PTS", [])
+    info = dict(INFO, n_choice=len(Q), choice_score=f"{sum(PTS):g}",
+                n_essay=len(ES), essay_score=f"{sum(EP):g}")
     arc = archive()
-    slots, n_pages = layout(Q, PTS, arc)
+    slots, n_pages = layout(Q, PTS, arc, ES, EP)
     info["pages"] = n_pages
     marks = pymupdf.open(os.path.join(ASSETS, "marks.pdf"))  # 마지막 쪽 이모티콘
     doc = pymupdf.open()
@@ -507,7 +534,9 @@ def main(out="시험지_양식.pdf", qmod="questions"):
         if n == 1:
             first_page_block(page, info)
         for pg, col, y, h, html in slots:
-            if pg == n:
+            if pg == n and html is None:
+                essay_head(page, info, COLS[col], y)
+            elif pg == n:
                 x0, x1 = COLS[col]
                 page.insert_htmlbox(pymupdf.Rect(x0, y, x1, y + h + 2), html, css=CSS,
                                     archive=arc)
