@@ -44,7 +44,7 @@
 
   <!-- 표시 점 -->
   <g fill="#3a66b0" stroke="#fff" stroke-width="1">
-    <circle cx="86" cy="203" r="5"/>
+    <circle cx="80" cy="203" r="5"/>
     <circle cx="104" cy="184" r="5"/>
     <circle cx="160" cy="176" r="5"/>
     <circle cx="232" cy="188" r="5"/>
@@ -52,7 +52,7 @@
   </g>
   <!-- 지시선과 기호 -->
   <g fill="none" stroke="#000" stroke-width="0.9">
-    <path d="M80,204 L34,232"/>
+    <path d="M75,204 L34,232"/>
     <path d="M102,180 L70,112"/>
     <path d="M160,171 L172,116"/>
     <path d="M236,184 L268,120"/>
