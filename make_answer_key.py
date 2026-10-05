@@ -223,9 +223,7 @@ def explanation_pages(doc, title, ANS, PTS, EXPL, essays=(), essay_after=None, s
         if state["y"] + 60 > bottom:
             state["page"], state["y"] = new_page(), top
         page, y = state["page"], state["y"]
-        page.draw_rect(pymupdf.Rect(L, y - 4, R, y + 12), color=None, fill=(0.9, 0.9, 0.9))
-        page.draw_line((L, y - 4), (R, y - 4), color=BLACK, width=1.0)
-        put(page, L + 6, y + 7, t, 9.5, anchor="l")
+        page.insert_text((L, y + 7), t, fontname="Title", fontfile=FONTS["Title"], fontsize=10, color=BLACK)
         state["y"] = y + 26
 
     def choice(i):

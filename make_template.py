@@ -362,9 +362,8 @@ td.cs { width: 25%; }
 .cw { font-size: 7pt; color: #555555; }
 table.sgn { margin: 3pt 0; }
 table.sgn td.sg { border: 1.2pt solid black; padding: 4pt; text-align: center; vertical-align: middle; }
-table.sec { margin: 0 0 5pt 0; }
-table.sec td { font-family: D; font-size: 8.6pt; background-color: #e6e6e6; border-top: 1.2pt solid black;
-               border-bottom: 0.6pt solid black; padding: 2pt 4pt; }
+table.sec { margin: 2pt 0 4pt 0; }
+table.sec td { font-family: B; font-size: 9pt; padding: 0; }
 .grp { font-family: B; font-size: 8.6pt; margin-bottom: 3pt; }
 table.al { margin-top: 3pt; }
 table.al td { border-bottom: 0.5pt solid #888888; padding: 0; line-height: 16pt; }
