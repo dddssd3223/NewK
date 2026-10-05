@@ -85,6 +85,11 @@ class Set:
     def __init__(self):
         self.Q, self.ANS, self.EXPL, self.W = [], [], [], []
         self.ES, self.EA, self.ER, self.EW, self.AFTER = [], [], [], [], []
+        self.SECT = []
+
+    def section(self, title):
+        """다음에 나오는 문항(선택형이든 서술형이든) 위에 대제목을 단다."""
+        self.SECT.append((len(self.Q) + len(self.ES), title))
 
     def add(self, stem, body, ans, expl, w=4):
         self.Q.append((stem, body))
@@ -112,6 +117,6 @@ class Set:
         n = len(self.W)
         g.update(Q=self.Q, ANS=self.ANS, EXPL=self.EXPL, PTS=pts[:n],
                  ESSAY=self.ES, ESSAY_ANS=self.EA, ESSAY_RUBRIC=self.ER, ESSAY_PTS=pts[n:],
-                 ESSAY_AFTER=self.AFTER)
+                 ESSAY_AFTER=self.AFTER, SECTIONS=self.SECT)
         assert abs(sum(pts) - total) < 1e-6
         return g

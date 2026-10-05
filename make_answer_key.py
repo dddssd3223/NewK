@@ -190,7 +190,7 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     if getattr(mod, "EXPL", None):
         explanation_pages(doc, title, ANS, PTS, mod.EXPL,
                           list(zip(EP, mod.ESSAY_ANS, mod.ESSAY_RUBRIC)) if ne else (),
-                          getattr(mod, "ESSAY_AFTER", None))
+                          getattr(mod, "ESSAY_AFTER", None), getattr(mod, "SECTIONS", ()))
 
     doc.set_metadata({"title": f"{title} 정답지"})
     doc.subset_fonts()
@@ -198,7 +198,7 @@ def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=P
     print("saved", out)
 
 
-def explanation_pages(doc, title, ANS, PTS, EXPL, essays=(), essay_after=None):
+def explanation_pages(doc, title, ANS, PTS, EXPL, essays=(), essay_after=None, sections=()):
     """문항별 정답·해설. 한 단으로, 페이지가 차면 다음 쪽으로 넘긴다.
     essay_after 가 있으면 서술형 해설을 문제지와 같은 자리(선택형 k번 뒤)에 끼워 넣는다."""
     L, R, top, bottom = 49.0, 541.0, 140.0, 790.0
@@ -212,9 +212,24 @@ def explanation_pages(doc, title, ANS, PTS, EXPL, essays=(), essay_after=None):
         page.draw_line((112, 103), (114 + tw + 4, 103), color=BLACK, width=0.8, dashes="[1 1.5] 0")
         return page
 
-    state = {"page": new_page(), "y": top}
+    state = {"page": new_page(), "y": top, "seq": 0}
+    heads = dict(sections)
+
+    def head():
+        t = heads.get(state["seq"])
+        state["seq"] += 1
+        if not t:
+            return
+        if state["y"] + 60 > bottom:
+            state["page"], state["y"] = new_page(), top
+        page, y = state["page"], state["y"]
+        page.draw_rect(pymupdf.Rect(L, y - 4, R, y + 12), color=None, fill=(0.9, 0.9, 0.9))
+        page.draw_line((L, y - 4), (R, y - 4), color=BLACK, width=1.0)
+        put(page, L + 6, y + 7, t, 9.5, anchor="l")
+        state["y"] = y + 26
 
     def choice(i):
+        head()
         a, pt, ex = ANS[i - 1], PTS[i - 1], EXPL[i - 1]
         body = ex.split(" [함정] ")
         lines = wrap(body[0], size, R - L - 70)
@@ -238,6 +253,7 @@ def explanation_pages(doc, title, ANS, PTS, EXPL, essays=(), essay_after=None):
         state["y"] = y
 
     def essay(i):
+        head()
         pt, ans, rubric = essays[i - 1]
         blocks = [(wrap("[모범 답안] " + a, size, R - L - 70), BLACK) for a in ans.split("\n")]
         blocks += [(wrap(r, size, R - L - 70), (0.15, 0.25, 0.55)) for r in rubric]
