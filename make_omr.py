@@ -57,7 +57,7 @@ def digit_column(page, x, y, n_digits, title, fixed=None, cw=15.0, row=13.2):
     for d in range(n_digits):
         r = pymupdf.Rect(x + cw * d, y + 15, x + cw * (d + 1), y + 33)
         rect(page, r)
-        if fixed:
+        if fixed and len(fixed) == n_digits:        # 자리 수가 맞을 때만 미리 써 넣는다
             put(page, (r.x0 + r.x1) / 2, r.y1 - 5, fixed[d], 10, "c", BLACK)
     body = pymupdf.Rect(x, y + 33, x + wtot, y + 33 + row * 10 + 4)
     rect(page, body)
@@ -176,7 +176,9 @@ def answer_panel(page, n, x0, x1, per_col=None):
 
 def main(qmod, out, label="", n=None):
     if qmod != "-":
-        n = len(importlib.import_module(qmod).Q)
+        mod = importlib.import_module(qmod)
+        INFO.update(getattr(mod, "INFO", {}))   # 과목명 등 문항 모듈이 덮어쓸 수 있다
+        n = len(mod.Q)
     n = int(n)
     doc = pymupdf.open()
     page = doc.new_page(width=W, height=H)

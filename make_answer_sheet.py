@@ -183,6 +183,7 @@ def block(page, y, n, pts, es):
 
 def main(qmod, out, label=""):
     mod = importlib.import_module(qmod)
+    INFO.update(getattr(mod, "INFO", {}))   # 과목명 등 문항 모듈이 덮어쓸 수 있다
     ES, EP = mod.ESSAY, mod.ESSAY_PTS
     doc = pymupdf.open()
     page = doc.new_page(width=W, height=H)

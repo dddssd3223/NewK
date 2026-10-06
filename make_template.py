@@ -558,6 +558,7 @@ FIGURES = {"q09": draw_q09}
 
 def main(out="시험지_양식.pdf", qmod="questions"):
     mod = importlib.import_module(qmod)
+    INFO.update(getattr(mod, "INFO", {}))   # 과목명 등 문항 모듈이 덮어쓸 수 있다
     PTS, Q = mod.PTS, mod.Q
     ES, EP = getattr(mod, "ESSAY", []), getattr(mod, "ESSAY_PTS", [])
     info = dict(INFO, n_choice=len(Q), choice_score=f"{sum(PTS):g}",

@@ -116,6 +116,7 @@ def errata_page(doc):
 
 def main(out="정답지.pdf", qmod="questions", label="", errata=True, per_row=PER_ROW):
     mod = importlib.import_module(qmod)
+    INFO.update(getattr(mod, "INFO", {}))   # 과목명 등 문항 모듈이 덮어쓸 수 있다
     ANS, PTS, Q = mod.ANS, mod.PTS, mod.Q
     n = len(Q)
     total = sum(PTS)
